@@ -2521,11 +2521,13 @@ class EWM(_Rolling):
     @Substitution(name="ewm")
     @Appender(_doc_template)
     @Appender(_bias_template)
-    def var(self, bias=False, *args, **kwargs):
+    def var(self, bias=False, initialize=None, *args, **kwargs):
         """
         Exponential weighted moving variance.
         """
         nv.validate_window_func("var", args, kwargs)
+        if initialize is None:
+            initialize = 0
 
         def f(arg):
             return libwindow.ewmcov(
@@ -2536,6 +2538,7 @@ class EWM(_Rolling):
                 int(self.ignore_na),
                 int(self.min_periods),
                 int(bias),
+                initialize
             )
 
         return self._apply(f, **kwargs)
@@ -2543,7 +2546,7 @@ class EWM(_Rolling):
     @Substitution(name="ewm")
     @Appender(_doc_template)
     @Appender(_pairwise_template)
-    def cov(self, other=None, pairwise=None, bias=False, **kwargs):
+    def cov(self, other=None, pairwise=None, bias=False, initialize=None, **kwargs):
         """
         Exponential weighted sample covariance.
         """
@@ -2553,9 +2556,10 @@ class EWM(_Rolling):
             pairwise = True if pairwise is None else pairwise
         other = self._shallow_copy(other)
 
-        def _get_cov(X, Y):
+        def _get_cov(X, Y, init):
             X = self._shallow_copy(X)
             Y = self._shallow_copy(Y)
+            init = self._shallow_copy(init)
             cov = libwindow.ewmcov(
                 X._prep_values(),
                 Y._prep_values(),
@@ -2564,17 +2568,18 @@ class EWM(_Rolling):
                 int(self.ignore_na),
                 int(self.min_periods),
                 int(bias),
+                init
             )
             return X._wrap_result(cov)
 
         return _flex_binary_moment(
-            self._selected_obj, other._selected_obj, _get_cov, pairwise=bool(pairwise)
+            self._selected_obj, other._selected_obj, _get_cov, pairwise=bool(pairwise), initialize=initialize
         )
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
     @Appender(_pairwise_template)
-    def corr(self, other=None, pairwise=None, **kwargs):
+    def corr(self, other=None, pairwise=None, initialize=None, **kwargs):
         """
         Exponential weighted sample correlation.
         """
@@ -2584,9 +2589,10 @@ class EWM(_Rolling):
             pairwise = True if pairwise is None else pairwise
         other = self._shallow_copy(other)
 
-        def _get_corr(X, Y):
+        def _get_corr(X, Y, init):
             X = self._shallow_copy(X)
             Y = self._shallow_copy(Y)
+            init = self._shallow_copy(init)
 
             def _cov(x, y):
                 return libwindow.ewmcov(
@@ -2597,6 +2603,7 @@ class EWM(_Rolling):
                     int(self.ignore_na),
                     int(self.min_periods),
                     1,
+                    init
                 )
 
             x_values = X._prep_values()
@@ -2609,18 +2616,21 @@ class EWM(_Rolling):
             return X._wrap_result(corr)
 
         return _flex_binary_moment(
-            self._selected_obj, other._selected_obj, _get_corr, pairwise=bool(pairwise)
+            self._selected_obj, other._selected_obj, _get_corr, pairwise=bool(pairwise), initialize=initialize
         )
 
 
 # Helper Funcs
 
 
-def _flex_binary_moment(arg1, arg2, f, pairwise=False):
+def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
+    if initialize is None:
+        initialize = 0
 
     if not (
         isinstance(arg1, (np.ndarray, ABCSeries, ABCDataFrame))
         and isinstance(arg2, (np.ndarray, ABCSeries, ABCDataFrame))
+        and (initialize is None or isinstance(initialize, (np.ndarray, ABCSeries, ABCDataFrame)))
     ):
         raise TypeError(
             "arguments to moment function must be of type "
@@ -2630,8 +2640,8 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False):
     if isinstance(arg1, (np.ndarray, ABCSeries)) and isinstance(
         arg2, (np.ndarray, ABCSeries)
     ):
-        X, Y = _prep_binary(arg1, arg2)
-        return f(X, Y)
+        X, Y, init = _prep_binary(arg1, arg2, initialize)
+        return f(X, Y, init)
 
     elif isinstance(arg1, ABCDataFrame):
         from pandas import DataFrame
@@ -2744,7 +2754,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False):
             return dataframe_from_int_dict(results, arg1)
 
     else:
-        return _flex_binary_moment(arg2, arg1, f)
+        return _flex_binary_moment(arg2, arg1, f, initialize=initialize)
 
 
 def _get_center_of_mass(comass, span, halflife, alpha):
@@ -2817,15 +2827,18 @@ def _zsqrt(x):
     return result
 
 
-def _prep_binary(arg1, arg2):
+def _prep_binary(arg1, arg2, initialize):
     if not isinstance(arg2, type(arg1)):
         raise Exception("Input arrays must be of the same type!")
+    if initialize != 0 and not isinstance(initialize, type(arg1)):
+        raise Exception("Initialize argument must the same type as the input arrays!")
 
     # mask out values, this also makes a common index...
     X = arg1 + 0 * arg2
     Y = arg2 + 0 * arg1
+    init = initialize + 0 * arg1
 
-    return X, Y
+    return X, Y, init
 
 
 # Top-level exports

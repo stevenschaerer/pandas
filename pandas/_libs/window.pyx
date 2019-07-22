@@ -1744,7 +1744,7 @@ def roll_window(ndarray[float64_t, ndim=1, cast=True] values,
 
 
 def ewma(float64_t[:] vals, float64_t com,
-         int adjust, int ignore_na, int minp):
+         int adjust, int ignore_na, int minp, float64_t initialize):
     """
     Compute exponentially-weighted moving average using center-of-mass.
 
@@ -1755,11 +1755,15 @@ def ewma(float64_t[:] vals, float64_t com,
     adjust: int
     ignore_na: int
     minp: int
+    initialize: float64_t
 
     Returns
     -------
     y : ndarray
     """
+
+    if initialize:
+        vals = np.insert(vals, 0, initialize)
 
     cdef:
         Py_ssize_t N = len(vals)
@@ -1806,6 +1810,9 @@ def ewma(float64_t[:] vals, float64_t com,
 
         output[i] = weighted_avg if (nobs >= minp) else NaN
 
+    if initialize:
+        output = output[1:]
+
     return output
 
 
@@ -1814,7 +1821,7 @@ def ewma(float64_t[:] vals, float64_t com,
 
 
 def ewmcov(float64_t[:] input_x, float64_t[:] input_y,
-           float64_t com, int adjust, int ignore_na, int minp, int bias):
+           float64_t com, int adjust, int ignore_na, int minp, int bias, float64_t initialize):
     """
     Compute exponentially-weighted moving variance using center-of-mass.
 
@@ -1827,6 +1834,7 @@ def ewmcov(float64_t[:] input_x, float64_t[:] input_y,
     ignore_na: int
     minp: int
     bias: int
+    initialize: float64
 
     Returns
     -------
@@ -1862,7 +1870,7 @@ def ewmcov(float64_t[:] input_x, float64_t[:] input_y,
         mean_x = NaN
         mean_y = NaN
     output[0] = (0. if bias else NaN) if (nobs >= minp) else NaN
-    cov = 0.
+    cov = initialize if initialize else 0.
     sum_wt = 1.
     sum_wt2 = 1.
     old_wt = 1.
