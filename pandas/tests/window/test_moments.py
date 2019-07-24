@@ -1871,6 +1871,7 @@ class TestMomentsConsistency(Base):
         tm.assert_series_equal(result, expected, check_names=False)
 
     def test_flex_binary_moment(self):
+        # TODO: extend
         # GH3155
         # don't blow the stack
         msg = (

@@ -13,6 +13,7 @@ import numpy as np
 import pandas._libs.window as libwindow
 from pandas.compat._optional import import_optional_dependency
 from pandas.compat.numpy import function as nv
+from pandas.core.dtypes.inference import is_number
 from pandas.util._decorators import Appender, Substitution, cache_readonly
 
 from pandas.core.dtypes.common import (
@@ -1529,7 +1530,7 @@ class _Rolling_and_Expanding(_Rolling):
         else:
             window = self._get_window(other)
 
-        def _get_cov(X, Y):
+        def _get_cov(X, Y, *args):
             # GH #12373 : rolling functions error on float32 data
             # to avoid potential overflow, cast the data to float64
             X = X.astype("float64")
@@ -2559,7 +2560,6 @@ class EWM(_Rolling):
         def _get_cov(X, Y, init):
             X = self._shallow_copy(X)
             Y = self._shallow_copy(Y)
-            init = self._shallow_copy(init)
             cov = libwindow.ewmcov(
                 X._prep_values(),
                 Y._prep_values(),
@@ -2624,24 +2624,28 @@ class EWM(_Rolling):
 
 
 def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
-    if initialize is None:
-        initialize = 0
-
+    # TODO: check how to check for scalar data types
+    # TODO: support None/scalar value for dataframe cases
+    # TODO: ensure that col exist
+    # TODO: consider how initialize should be provided - dict, series (tuple as index?), dataframe?
     if not (
         isinstance(arg1, (np.ndarray, ABCSeries, ABCDataFrame))
         and isinstance(arg2, (np.ndarray, ABCSeries, ABCDataFrame))
-        and (initialize is None or isinstance(initialize, (np.ndarray, ABCSeries, ABCDataFrame)))
+        and (initialize is None or is_number(initialize) or isinstance(initialize, (ABCSeries, ABCDataFrame)))
     ):
         raise TypeError(
             "arguments to moment function must be of type "
             "np.ndarray/Series/DataFrame"
         )
 
+    if initialize is None:
+        initialize = 0
+
     if isinstance(arg1, (np.ndarray, ABCSeries)) and isinstance(
         arg2, (np.ndarray, ABCSeries)
     ):
-        X, Y, init = _prep_binary(arg1, arg2, initialize)
-        return f(X, Y, init)
+        X, Y = _prep_binary(arg1, arg2)
+        return f(X, Y, initialize)
 
     elif isinstance(arg1, ABCDataFrame):
         from pandas import DataFrame
@@ -2658,7 +2662,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                 if arg1 is arg2:
                     # special case in order to handle duplicate column names
                     for i, col in enumerate(arg1.columns):
-                        results[i] = f(arg1.iloc[:, i], arg2.iloc[:, i])
+                        results[i] = f(arg1.iloc[:, i], arg2.iloc[:, i], initialize[col])
                     return dataframe_from_int_dict(results, arg1)
                 else:
                     if not arg1.columns.is_unique:
@@ -2676,7 +2680,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                         res_columns = arg1.columns.union(arg2.columns)
                     for col in res_columns:
                         if col in X and col in Y:
-                            results[col] = f(X[col], Y[col])
+                            results[col] = f(X[col], Y[col], initialize[col])
                     return DataFrame(results, index=X.index, columns=res_columns)
             elif pairwise is True:
                 results = defaultdict(dict)
@@ -2687,7 +2691,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                             results[i][j] = results[j][i]
                         else:
                             results[i][j] = f(
-                                *_prep_binary(arg1.iloc[:, i], arg2.iloc[:, j])
+                                *_prep_binary(arg1.iloc[:, i], arg2.iloc[:, j]), initialize[k1, k2]
                             )
 
                 from pandas import MultiIndex, concat
@@ -2748,7 +2752,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                 raise ValueError("'pairwise' is not True/False")
         else:
             results = {
-                i: f(*_prep_binary(arg1.iloc[:, i], arg2))
+                i: f(*_prep_binary(arg1.iloc[:, i], arg2), initialize[col])
                 for i, col in enumerate(arg1.columns)
             }
             return dataframe_from_int_dict(results, arg1)
@@ -2827,18 +2831,15 @@ def _zsqrt(x):
     return result
 
 
-def _prep_binary(arg1, arg2, initialize):
+def _prep_binary(arg1, arg2):
     if not isinstance(arg2, type(arg1)):
         raise Exception("Input arrays must be of the same type!")
-    if initialize != 0 and not isinstance(initialize, type(arg1)):
-        raise Exception("Initialize argument must the same type as the input arrays!")
 
     # mask out values, this also makes a common index...
     X = arg1 + 0 * arg2
     Y = arg2 + 0 * arg1
-    init = initialize + 0 * arg1
 
-    return X, Y, init
+    return X, Y
 
 
 # Top-level exports
