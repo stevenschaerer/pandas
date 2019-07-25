@@ -952,7 +952,8 @@ class TestMoments(Base):
 
     @pytest.mark.parametrize("adjust", [True, False])
     @pytest.mark.parametrize("ignore_na", [True, False])
-    def test_ewma_cases(self, adjust, ignore_na):
+    @pytest.mark.parametrize("initialize", [0, None])
+    def test_ewma_cases(self, adjust, ignore_na, initialize):
         # try adjust/ignore_na args matrix
 
         s = Series([1.0, 2.0, 4.0, 8.0])
@@ -962,8 +963,21 @@ class TestMoments(Base):
         else:
             expected = Series([1.0, 1.333333, 2.222222, 4.148148])
 
-        result = s.ewm(com=2.0, adjust=adjust, ignore_na=ignore_na).mean()
+        result = s.ewm(com=2.0, adjust=adjust, ignore_na=ignore_na).mean(initialize=initialize)
         tm.assert_series_equal(result, expected)
+
+    def test_ewma_initialize(self):
+        self._check_ew(name="mean")
+
+        vals = pd.Series(np.zeros(1000))
+        result = vals.ewm(span=100, adjust=False).mean(initialize=1).sum()
+        assert np.abs(result - (100-1)/2) < 1e-5
+
+        # GH 13638
+        # ensure using initialize is same as pre-appending array, computing mean() and removing first element
+        vals_manual = pd.Series(np.insert(np.zeros(1000), 0, 1))
+        result_manual = vals_manual.ewm(span=100, adjust=False).mean().loc[1:].sum()
+        assert np.abs(result - result_manual) < 1e-5
 
     def test_ewma_nan_handling(self):
         s = Series([1.0] + [np.nan] * 5 + [1.0])

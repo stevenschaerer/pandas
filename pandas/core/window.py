@@ -2486,7 +2486,7 @@ class EWM(_Rolling):
                         self.com,
                         int(self.adjust),
                         int(self.ignore_na),
-                        int(self.min_periods),
+                        int(self.min_periods)
                     )
 
             results.append(np.apply_along_axis(func, self.axis, values))
@@ -2495,7 +2495,7 @@ class EWM(_Rolling):
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
-    def mean(self, *args, **kwargs):
+    def mean(self, initialize=None, *args, **kwargs):
         """
         Exponential weighted moving average.
 
@@ -2505,7 +2505,19 @@ class EWM(_Rolling):
             Arguments and keyword arguments to be passed into func.
         """
         nv.validate_window_func("mean", args, kwargs)
-        return self._apply("ewma", **kwargs)
+        if initialize is None:
+            initialize = 0
+
+        def f(arg):
+            return libwindow.ewma(
+                arg,
+                self.com,
+                int(self.adjust),
+                int(self.ignore_na),
+                int(self.min_periods),
+                initialize
+            )
+        return self._apply(f, **kwargs)
 
     @Substitution(name="ewm")
     @Appender(_doc_template)

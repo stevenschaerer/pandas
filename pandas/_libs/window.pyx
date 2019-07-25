@@ -1761,7 +1761,7 @@ def ewma(float64_t[:] vals, float64_t com,
     -------
     y : ndarray
     """
-
+    # TODO: think about behavior of empty series with initialize
     if initialize:
         vals = np.insert(vals, 0, initialize)
 
