@@ -2259,7 +2259,7 @@ _initialize_template = """
             Arguments and keyword arguments to be passed into func.
 """
 
-_pairwise_with_initialize_template = """
+_pairwise_bias_initialize_template = """
         Parameters
         ----------
         other : Series, DataFrame, or ndarray, optional
@@ -2296,8 +2296,6 @@ _pairwise_template = """
             output will be a MultiIndex DataFrame in the case of DataFrame
             inputs. In the case of missing elements, only complete pairwise
             observations will be used.
-        bias : bool, default False
-           Use a standard estimation bias correction.
         **kwargs
            Keyword arguments to be passed into func.
 """
@@ -2582,7 +2580,7 @@ class EWM(_Rolling):
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
-    @Appender(_pairwise_with_initialize_template)
+    @Appender(_pairwise_bias_initialize_template)
     def cov(self, other=None, pairwise=None, bias=False, initialize=None, **kwargs):
         """
         Exponential weighted sample covariance.
