@@ -2240,8 +2240,47 @@ _bias_template = """
         ----------
         bias : bool, default False
             Use a standard estimation bias correction.
+        initialize: float or dict, optional
+            If not supplied then will default to zero. If caller is Series
+            must be float. If dict and caller is DataFrame, keys must be 
+            DataFrame column names.
         *args, **kwargs
             Arguments and keyword arguments to be passed into func.
+"""
+
+_initialize_template = """
+        Parameters
+        ----------
+        initialize: float or dict, optional
+            If not supplied then will default to zero. If caller is Series
+            must be float. If dict and caller is DataFrame, keys must be 
+            DataFrame column names.
+        *args, **kwargs
+            Arguments and keyword arguments to be passed into func.
+"""
+
+_pairwise_with_initialize_template = """
+        Parameters
+        ----------
+        other : Series, DataFrame, or ndarray, optional
+            If not supplied then will default to self and produce pairwise
+            output.
+        pairwise : bool, default None
+            If False then only matching columns between self and other will be
+            used and the output will be a DataFrame.
+            If True then all pairwise combinations will be calculated and the
+            output will be a MultiIndex DataFrame in the case of DataFrame
+            inputs. In the case of missing elements, only complete pairwise
+            observations will be used.
+        bias : bool, default False
+           Use a standard estimation bias correction.
+        initialize: float or dict, optional
+            If not supplied then will default to zero. If caller and other are 
+            Series or ndarray must be float. If dict, keys must be DataFrame 
+            column names. If pairwise is True, keys must be all pairwise
+            combinations of column names as tuples. 
+        **kwargs
+           Keyword arguments to be passed into func.
 """
 
 _pairwise_template = """
@@ -2437,7 +2476,7 @@ class EWM(_Rolling):
 
     agg = aggregate
 
-    def _apply(self, func, **kwargs):
+    def _apply(self, func, initialize=None, **kwargs):
         """
         Rolling statistical measure using supplied function. Designed to be
         used with passed-in Cython array-based functions.
@@ -2445,89 +2484,74 @@ class EWM(_Rolling):
         Parameters
         ----------
         func : str/callable to apply
+        initialize: float/dict, optional
 
         Returns
         -------
         y : same type as input argument
         """
-        blocks, obj = self._create_blocks()
-        block_list = list(blocks)
+        if isinstance(initialize, dict) and isinstance(self._selected_obj, ABCDataFrame):
+            results = []
+            if not isinstance(initialize, dict):
+                initialize = {col: initialize for col in self._selected_obj.columns}
+            for i, col in enumerate(self._selected_obj.columns):
+                results[i] = func(self._selected_obj.iloc[:, i], initialize[col])
+            return _dataframe_from_int_dict(results, self._selected_obj)
+        else:
+            blocks, obj = self._create_blocks()
+            block_list = list(blocks)
 
-        results = []
-        exclude = []
-        for i, b in enumerate(blocks):
-            try:
-                values = self._prep_values(b.values)
+            results = []
+            exclude = []
+            for i, b in enumerate(blocks):
+                try:
+                    values = self._prep_values(b.values)
 
-            except (TypeError, NotImplementedError):
-                if isinstance(obj, ABCDataFrame):
-                    exclude.extend(b.columns)
-                    del block_list[i]
+                except (TypeError, NotImplementedError):
+                    if isinstance(obj, ABCDataFrame):
+                        exclude.extend(b.columns)
+                        del block_list[i]
+                        continue
+                    else:
+                        raise DataError("No numeric types to aggregate")
+
+                if values.size == 0:
+                    results.append(values.copy())
                     continue
-                else:
-                    raise DataError("No numeric types to aggregate")
 
-            if values.size == 0:
-                results.append(values.copy())
-                continue
+                results.append(np.apply_along_axis(func, self.axis, values, initialize))
 
-            # if we have a string function name, wrap it
-            if isinstance(func, str):
-                cfunc = getattr(libwindow, func, None)
-                if cfunc is None:
-                    raise ValueError(
-                        "we do not support this function "
-                        "in libwindow.{func}".format(func=func)
-                    )
-
-                def func(arg):
-                    return cfunc(
-                        arg,
-                        self.com,
-                        int(self.adjust),
-                        int(self.ignore_na),
-                        int(self.min_periods)
-                    )
-
-            results.append(np.apply_along_axis(func, self.axis, values))
-
-        return self._wrap_results(results, block_list, obj, exclude)
+            return self._wrap_results(results, block_list, obj, exclude)
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
+    @Appender(_initialize_template)
     def mean(self, initialize=None, *args, **kwargs):
         """
         Exponential weighted moving average.
-
-        Parameters
-        ----------
-        *args, **kwargs
-            Arguments and keyword arguments to be passed into func.
         """
         nv.validate_window_func("mean", args, kwargs)
-        if initialize is None:
-            initialize = 0
 
-        def f(arg):
+        def f(arg, init):
             return libwindow.ewma(
                 arg,
                 self.com,
                 int(self.adjust),
                 int(self.ignore_na),
                 int(self.min_periods),
-                initialize
+                init
             )
-        return self._apply(f, **kwargs)
+        return self._apply(f, initialize=initialize, **kwargs)
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
     @Appender(_bias_template)
-    def std(self, bias=False, *args, **kwargs):
+    def std(self, bias=False, initialize=None, *args, **kwargs):
         """
         Exponential weighted moving stddev.
         """
         nv.validate_window_func("std", args, kwargs)
-        return _zsqrt(self.var(bias=bias, **kwargs))
+        return _zsqrt(self.var(bias=bias, initialize=initialize, **kwargs))
 
     vol = std
 
@@ -2542,7 +2566,7 @@ class EWM(_Rolling):
         if initialize is None:
             initialize = 0
 
-        def f(arg):
+        def f(arg, init):
             return libwindow.ewmcov(
                 arg,
                 arg,
@@ -2551,14 +2575,14 @@ class EWM(_Rolling):
                 int(self.ignore_na),
                 int(self.min_periods),
                 int(bias),
-                initialize
+                init
             )
 
-        return self._apply(f, **kwargs)
+        return self._apply(f, initialize=initialize, **kwargs)
 
     @Substitution(name="ewm")
     @Appender(_doc_template)
-    @Appender(_pairwise_template)
+    @Appender(_pairwise_with_initialize_template)
     def cov(self, other=None, pairwise=None, bias=False, initialize=None, **kwargs):
         """
         Exponential weighted sample covariance.
@@ -2591,22 +2615,22 @@ class EWM(_Rolling):
     @Substitution(name="ewm")
     @Appender(_doc_template)
     @Appender(_pairwise_template)
-    def corr(self, other=None, pairwise=None, initialize=None, **kwargs):
+    def corr(self, other=None, pairwise=None, **kwargs):
         """
         Exponential weighted sample correlation.
         """
-        # TODO: check initialize logic - is initialize initial correlation or covariance?
+        # TODO: consider whether to add initialize - would need potentially three arguments (cov, var and var)
         if other is None:
             other = self._selected_obj
             # only default unset
             pairwise = True if pairwise is None else pairwise
         other = self._shallow_copy(other)
 
-        def _get_corr(X, Y, init):
+        def _get_corr(X, Y, _):
             X = self._shallow_copy(X)
             Y = self._shallow_copy(Y)
 
-            def _cov(x, y, initial_value):
+            def _cov(x, y):
                 return libwindow.ewmcov(
                     x,
                     y,
@@ -2615,24 +2639,32 @@ class EWM(_Rolling):
                     int(self.ignore_na),
                     int(self.min_periods),
                     1,
-                    initial_value
+                    0
                 )
 
             x_values = X._prep_values()
             y_values = Y._prep_values()
             with np.errstate(all="ignore"):
-                cov = _cov(x_values, y_values, initial_value=init)
-                x_var = _cov(x_values, x_values, initial_value=0)
-                y_var = _cov(y_values, y_values, initial_value=0)
+                cov = _cov(x_values, y_values)
+                x_var = _cov(x_values, x_values)
+                y_var = _cov(y_values, y_values)
                 corr = cov / _zsqrt(x_var * y_var)
             return X._wrap_result(corr)
 
         return _flex_binary_moment(
-            self._selected_obj, other._selected_obj, _get_corr, pairwise=bool(pairwise), initialize=initialize
+            self._selected_obj, other._selected_obj, _get_corr, pairwise=bool(pairwise)
         )
 
 
 # Helper Funcs
+
+
+def _dataframe_from_int_dict(data, frame_template):
+    from pandas import DataFrame
+    result = DataFrame(data, index=frame_template.index)
+    if len(result.columns) > 0:
+        result.columns = frame_template.columns[result.columns]
+    return result
 
 
 def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
@@ -2666,12 +2698,6 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
     elif isinstance(arg1, ABCDataFrame):
         from pandas import DataFrame
 
-        def dataframe_from_int_dict(data, frame_template):
-            result = DataFrame(data, index=frame_template.index)
-            if len(result.columns) > 0:
-                result.columns = frame_template.columns[result.columns]
-            return result
-
         results = {}
         if isinstance(arg2, ABCDataFrame):
             if pairwise is False:
@@ -2681,7 +2707,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                     # special case in order to handle duplicate column names
                     for i, col in enumerate(arg1.columns):
                         results[i] = f(arg1.iloc[:, i], arg2.iloc[:, i], initialize[col])
-                    return dataframe_from_int_dict(results, arg1)
+                    return _dataframe_from_int_dict(results, arg1)
                 else:
                     if not arg1.columns.is_unique:
                         raise ValueError("'arg1' columns are not unique")
@@ -2777,7 +2803,7 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                 i: f(*_prep_binary(arg1.iloc[:, i], arg2), initialize[col])
                 for i, col in enumerate(arg1.columns)
             }
-            return dataframe_from_int_dict(results, arg1)
+            return _dataframe_from_int_dict(results, arg1)
 
     else:
         return _flex_binary_moment(arg2, arg1, f, initialize=initialize)

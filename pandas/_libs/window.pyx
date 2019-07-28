@@ -1809,7 +1809,7 @@ def ewma(float64_t[:] vals, float64_t com,
 
         output[i] = weighted_avg if (nobs >= minp) else NaN
 
-    if initialize:
+    if initialize is not None:
         output = output[1:]
 
     return output

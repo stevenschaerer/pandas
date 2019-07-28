@@ -194,7 +194,6 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
     def __init__(
         self, data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
     ):
-
         # we are called internally, so short-circuit
         if fastpath:
 

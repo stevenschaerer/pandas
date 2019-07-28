@@ -952,7 +952,7 @@ class TestMoments(Base):
 
     @pytest.mark.parametrize("adjust", [True, False])
     @pytest.mark.parametrize("ignore_na", [True, False])
-    @pytest.mark.parametrize("initialize", [0, None])
+    @pytest.mark.parametrize("initialize", [None])
     def test_ewma_cases(self, adjust, ignore_na, initialize):
         # try adjust/ignore_na args matrix
 
@@ -967,6 +967,7 @@ class TestMoments(Base):
         tm.assert_series_equal(result, expected)
 
     def test_ewma_initialize(self):
+        a = pd.Series(data=1)
         self._check_ew(name="mean")
 
         vals = pd.Series(np.zeros(1000))
