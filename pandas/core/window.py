@@ -1530,7 +1530,7 @@ class _Rolling_and_Expanding(_Rolling):
         else:
             window = self._get_window(other)
 
-        def _get_cov(X, Y, *args):
+        def _get_cov(X, Y, _):
             # GH #12373 : rolling functions error on float32 data
             # to avoid potential overflow, cast the data to float64
             X = X.astype("float64")
@@ -1665,7 +1665,7 @@ class _Rolling_and_Expanding(_Rolling):
         other = self._shallow_copy(other)
         window = self._get_window(other)
 
-        def _get_corr(a, b):
+        def _get_corr(a, b, _):
             a = a.rolling(
                 window=window, min_periods=self.min_periods, center=self.center
             )
@@ -2595,6 +2595,7 @@ class EWM(_Rolling):
         """
         Exponential weighted sample correlation.
         """
+        # TODO: check initialize logic - is initialize initial correlation or covariance?
         if other is None:
             other = self._selected_obj
             # only default unset
@@ -2604,9 +2605,8 @@ class EWM(_Rolling):
         def _get_corr(X, Y, init):
             X = self._shallow_copy(X)
             Y = self._shallow_copy(Y)
-            init = self._shallow_copy(init)
 
-            def _cov(x, y):
+            def _cov(x, y, initial_value):
                 return libwindow.ewmcov(
                     x,
                     y,
@@ -2615,15 +2615,15 @@ class EWM(_Rolling):
                     int(self.ignore_na),
                     int(self.min_periods),
                     1,
-                    init
+                    initial_value
                 )
 
             x_values = X._prep_values()
             y_values = Y._prep_values()
             with np.errstate(all="ignore"):
-                cov = _cov(x_values, y_values)
-                x_var = _cov(x_values, x_values)
-                y_var = _cov(y_values, y_values)
+                cov = _cov(x_values, y_values, initial_value=init)
+                x_var = _cov(x_values, x_values, initial_value=0)
+                y_var = _cov(y_values, y_values, initial_value=0)
                 corr = cov / _zsqrt(x_var * y_var)
             return X._wrap_result(corr)
 
@@ -2637,25 +2637,29 @@ class EWM(_Rolling):
 
 def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
     # TODO: check how to check for scalar data types
-    # TODO: support None/scalar value for dataframe cases
-    # TODO: ensure that col exist
-    # TODO: consider how initialize should be provided - dict, series (tuple as index?), dataframe?
+    # TODO: ensure that col exist?
+    if initialize is None:
+        initialize = 0
+    is_initialize_scalar = is_number(initialize)
+
     if not (
         isinstance(arg1, (np.ndarray, ABCSeries, ABCDataFrame))
         and isinstance(arg2, (np.ndarray, ABCSeries, ABCDataFrame))
-        and (initialize is None or is_number(initialize) or isinstance(initialize, (ABCSeries, ABCDataFrame)))
     ):
         raise TypeError(
             "arguments to moment function must be of type "
             "np.ndarray/Series/DataFrame"
         )
-
-    if initialize is None:
-        initialize = 0
+    if not (initialize is None or is_initialize_scalar or isinstance(initialize, dict)):
+        raise TypeError(
+            "Initialize must be None, numeric or of type dict"
+        )
 
     if isinstance(arg1, (np.ndarray, ABCSeries)) and isinstance(
         arg2, (np.ndarray, ABCSeries)
     ):
+        if not is_initialize_scalar:
+            raise TypeError("Initialize argument must be a scalar value or None")
         X, Y = _prep_binary(arg1, arg2)
         return f(X, Y, initialize)
 
@@ -2671,6 +2675,8 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
         results = {}
         if isinstance(arg2, ABCDataFrame):
             if pairwise is False:
+                if is_initialize_scalar:
+                    initialize = {col: initialize for col in arg1.columns}
                 if arg1 is arg2:
                     # special case in order to handle duplicate column names
                     for i, col in enumerate(arg1.columns):
@@ -2695,6 +2701,8 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
                             results[col] = f(X[col], Y[col], initialize[col])
                     return DataFrame(results, index=X.index, columns=res_columns)
             elif pairwise is True:
+                if is_initialize_scalar:
+                    initialize = {(k1, k2): initialize for k1 in arg1.columns for k2 in arg2.columns}
                 results = defaultdict(dict)
                 for i, k1 in enumerate(arg1.columns):
                     for j, k2 in enumerate(arg2.columns):
@@ -2763,6 +2771,8 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False, initialize=None):
             else:
                 raise ValueError("'pairwise' is not True/False")
         else:
+            if is_initialize_scalar:
+                initialize = {col: initialize for col in arg1.columns}
             results = {
                 i: f(*_prep_binary(arg1.iloc[:, i], arg2), initialize[col])
                 for i, col in enumerate(arg1.columns)

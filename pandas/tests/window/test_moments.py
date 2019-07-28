@@ -979,6 +979,13 @@ class TestMoments(Base):
         result_manual = vals_manual.ewm(span=100, adjust=False).mean().loc[1:].sum()
         assert np.abs(result - result_manual) < 1e-5
 
+        #
+        initialize = 22.221
+        vals = pd.Series([22.15, 22.39, 22.38, 22.61, 23.36, 24.05])
+        result = vals.ewm(span=10, adjust=False).mean(initialize=initialize)
+        expected = pd.Series([22.20809091, 22.24116529, 22.26640796, 22.32887924, 22.51635574, 22.79520015])
+        tm.assert_series_equal(result, expected)
+
     def test_ewma_nan_handling(self):
         s = Series([1.0] + [np.nan] * 5 + [1.0])
         result = s.ewm(com=5).mean()

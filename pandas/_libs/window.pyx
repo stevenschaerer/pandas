@@ -1744,7 +1744,7 @@ def roll_window(ndarray[float64_t, ndim=1, cast=True] values,
 
 
 def ewma(float64_t[:] vals, float64_t com,
-         int adjust, int ignore_na, int minp, float64_t initialize):
+         int adjust, int ignore_na, int minp, object initialize):
     """
     Compute exponentially-weighted moving average using center-of-mass.
 
@@ -1755,14 +1755,13 @@ def ewma(float64_t[:] vals, float64_t com,
     adjust: int
     ignore_na: int
     minp: int
-    initialize: float64_t
+    initialize: float64_t or None
 
     Returns
     -------
     y : ndarray
     """
-    # TODO: think about behavior of empty series with initialize
-    if initialize:
+    if initialize is not None:
         vals = np.insert(vals, 0, initialize)
 
     cdef:
@@ -1771,8 +1770,8 @@ def ewma(float64_t[:] vals, float64_t com,
         float64_t alpha, old_wt_factor, new_wt, weighted_avg, old_wt, cur
         Py_ssize_t i, nobs
 
-    if N == 0:
-        return output
+    if (initialize is not None and N == 1) or (N == 0):
+        return output[N:]
 
     minp = max(minp, 1)
 
