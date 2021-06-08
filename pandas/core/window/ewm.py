@@ -18,7 +18,10 @@ from pandas._typing import (
 from pandas.compat.numpy import function as nv
 from pandas.util._decorators import doc
 
-from pandas.core.dtypes.common import is_datetime64_ns_dtype
+from pandas.core.dtypes.common import (
+    is_datetime64_ns_dtype,
+    is_number,
+)
 from pandas.core.dtypes.missing import isna
 
 import pandas.core.common as common  # noqa: PDF018
@@ -28,6 +31,8 @@ from pandas.core.window.doc import (
     _shared_docs,
     args_compat,
     create_section_header,
+    ewm_numba_parameters,
+    initialize_parameter,
     kwargs_compat,
     template_header,
     template_returns,
@@ -333,6 +338,28 @@ class ExponentialMovingWindow(BaseWindow):
         """
         return ExponentialMovingWindowIndexer()
 
+    def _validate_initialize(self, initialize: float | str | None = None) -> None:
+        """
+        Validate the initialize value
+
+        Parameters
+        ----------
+            initialize : float, str, default None
+        """
+        if initialize is None:
+            return
+        if isinstance(initialize, str):
+            if initialize not in ["longterm_mean", "simple_mean"]:
+                raise ValueError(
+                    "initialize can only be 'longterm_mean' or 'simple_mean'."
+                )
+        elif not is_number(initialize):
+            raise ValueError("initialize must be a string, number or None.")
+        if self.times is not None and not initialize == "simple_mean":
+            raise NotImplementedError(
+                "initialize is not supported with non-None times."
+            )
+
     @doc(
         _shared_docs["aggregate"],
         see_also=dedent(
@@ -371,18 +398,53 @@ class ExponentialMovingWindow(BaseWindow):
     @doc(
         template_header,
         create_section_header("Parameters"),
+        initialize_parameter,
         args_compat,
         kwargs_compat,
         create_section_header("Returns"),
         template_returns,
         create_section_header("See Also"),
-        template_see_also[:-1],
+        template_see_also,
+        create_section_header("Examples"),
+        dedent(
+            """
+        >>> ewm = pd.Series([1, 2, 3, 4]).ewm(com=0.5, min_periods=2)
+        >>> ewm.mean()
+        0         NaN
+        1    1.750000
+        2    2.615385
+        3    3.550000
+        dtype: float64
+
+        >>> ewm.mean(initialize=2")
+        0    1.250000
+        1    1.769231
+        2    2.600000
+        3    3.537190
+        dtype: float64
+
+        >>> ewm.mean(initialize="simple_average")
+        0         NaN
+        1    1.500000
+        2    2.625000
+        3    3.576923
+        dtype: float64
+
+        >>> ewm.mean(initialize="longterm_average")
+        0    1.375000
+        1    1.807692
+        2    2.612500
+        3    3.541322
+        dtype: float64
+        """
+        ).replace("\n", "", 1),
         window_method="ewm",
         aggregation_description="(exponential weighted moment) mean",
         agg_method="mean",
     )
-    def mean(self, *args, **kwargs):
+    def mean(self, *args, initialize: float | str | None = None, **kwargs):
         nv.validate_window_func("mean", args, kwargs)
+        self._validate_initialize(initialize)
         window_func = window_aggregations.ewma
         window_func = partial(
             window_func,
@@ -390,6 +452,7 @@ class ExponentialMovingWindow(BaseWindow):
             adjust=self.adjust,
             ignore_na=self.ignore_na,
             deltas=self._deltas,
+            initialize=initialize,
         )
         return self._apply(window_func)
 
@@ -634,36 +697,27 @@ class ExponentialMovingWindowGroupby(BaseWindowGroupby, ExponentialMovingWindow)
         )
         return window_indexer
 
-    def mean(self, engine=None, engine_kwargs=None):
-        """
-        Parameters
-        ----------
-        engine : str, default None
-            * ``'cython'`` : Runs mean through C-extensions from cython.
-            * ``'numba'`` : Runs mean through JIT compiled code from numba.
-              Only available when ``raw`` is set to ``True``.
-            * ``None`` : Defaults to ``'cython'`` or globally setting
-              ``compute.use_numba``
-
-              .. versionadded:: 1.2.0
-
-        engine_kwargs : dict, default None
-            * For ``'cython'`` engine, there are no accepted ``engine_kwargs``
-            * For ``'numba'`` engine, the engine can accept ``nopython``, ``nogil``
-              and ``parallel`` dictionary keys. The values must either be ``True`` or
-              ``False``. The default ``engine_kwargs`` for the ``'numba'`` engine is
-              ``{'nopython': True, 'nogil': False, 'parallel': False}``.
-
-              .. versionadded:: 1.2.0
-
-        Returns
-        -------
-        Series or DataFrame
-            Return type is determined by the caller.
-        """
+    @doc(
+        template_header,
+        create_section_header("Parameters"),
+        initialize_parameter,
+        ewm_numba_parameters,
+        create_section_header("Returns"),
+        template_returns,
+        window_method="ewm",
+        aggregation_description="(exponential weighted moment) mean",
+        agg_method="mean",
+    )
+    def mean(self, initialize=None, engine=None, engine_kwargs=None):
         if maybe_use_numba(engine):
+            self._validate_initialize(initialize)
             groupby_ewma_func = generate_numba_groupby_ewma_func(
-                engine_kwargs, self._com, self.adjust, self.ignore_na, self._deltas
+                engine_kwargs,
+                self._com,
+                self.adjust,
+                self.ignore_na,
+                self._deltas,
+                initialize,
             )
             return self._apply(
                 groupby_ewma_func,
@@ -672,6 +726,6 @@ class ExponentialMovingWindowGroupby(BaseWindowGroupby, ExponentialMovingWindow)
         elif engine in ("cython", None):
             if engine_kwargs is not None:
                 raise ValueError("cython engine does not accept engine_kwargs")
-            return super().mean()
+            return super().mean(initialize=initialize)
         else:
             raise ValueError("engine must be either 'numba' or 'cython'")

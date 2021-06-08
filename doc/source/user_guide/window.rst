@@ -632,3 +632,34 @@ are scaled by debiasing factors
 with :math:`N = t + 1`.)
 See `Weighted Sample Variance <https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_variance>`__
 on Wikipedia for further details.
+
+.. versionadded:: 1.3.0
+
+The :meth:`~Ewm.mean` function has an ``initialize`` argument which controls how :math:`y_0`
+is calculated . When ``initialize=None`` (the default), :math:`y_0 = x_0`
+as described above. When ``initialize`` is a number, :math:`y_0` is set to that
+number. When ``initialize=longterm_mean``, :math:`y_0` is set to the mean of the
+whole series :math:`x_t`. Both of these options can be thought of as prepending the
+series of :math:`x_t` with an initial value. Finally, with ``initialize=simple_mean``
+the first ``min_period`` non-null elements of :math:`y_t` are calculated as a simple,
+non-exponentially weighted mean. For example, assuming ``adjusted=True``,
+``ignore_na=True`` and ``min_periods=2``, if ``initialize=simple_mean``, :math:`y_2`
+of ``3, NaN, 5`` would be calculated as
+
+.. math::
+
+	y_2 = \frac{1}{2} (3 + 5).
+
+Whereas if  ``initialize=None`` it would be calculated as
+
+.. math::
+
+	y_2 = \frac{(1-\alpha) \cdot 3 + 1 \cdot 5}{(1-\alpha) + 1}.
+
+.. ipython:: python
+
+    ewm = pd.DataFrame({"B": [0, np.nan, 2, 3, 4]}).ewm(com=0.5, min_periods=2)
+    ewm.mean()
+    ewm.mean(initialize=2)
+    ewm.mean(initialize='longterm_mean')
+    ewm.mean(initialize='simple_mean')

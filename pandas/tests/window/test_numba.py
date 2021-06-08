@@ -7,6 +7,7 @@ import pandas.util._test_decorators as td
 from pandas import (
     DataFrame,
     Series,
+    date_range,
     option_context,
     to_datetime,
 )
@@ -136,17 +137,29 @@ class TestGroupbyEWMMean:
                 engine="cython", engine_kwargs={"nopython": True}
             )
 
-    def test_cython_vs_numba(self, nogil, parallel, nopython, ignore_na, adjust):
-        df = DataFrame({"A": ["a", "b", "a", "b"], "B": range(4)})
-        gb_ewm = df.groupby("A").ewm(com=1.0, adjust=adjust, ignore_na=ignore_na)
+    @pytest.mark.parametrize("min_periods", [1, 2, 3])
+    def test_cython_vs_numba(
+        self, nogil, parallel, nopython, ignore_na, adjust, min_periods, initialize
+    ):
+        df = DataFrame(
+            {"A": ["a", "b", "a", "b", "a", "b"], "B": [0, 1, np.nan, 2, 3, np.nan]}
+        )
+        gb_ewm = df.groupby("A").ewm(
+            com=1.0, adjust=adjust, ignore_na=ignore_na, min_periods=min_periods
+        )
 
         engine_kwargs = {"nogil": nogil, "parallel": parallel, "nopython": nopython}
-        result = gb_ewm.mean(engine="numba", engine_kwargs=engine_kwargs)
-        expected = gb_ewm.mean(engine="cython")
+        result = gb_ewm.mean(
+            initialize=initialize, engine="numba", engine_kwargs=engine_kwargs
+        )
+        expected = gb_ewm.mean(initialize=initialize, engine="cython")
 
         tm.assert_frame_equal(result, expected)
 
-    def test_cython_vs_numba_times(self, nogil, parallel, nopython, ignore_na):
+    @pytest.mark.parametrize("initialize", [None, "simple_mean"])
+    def test_cython_vs_numba_times(
+        self, nogil, parallel, nopython, ignore_na, initialize
+    ):
         # GH 40951
         halflife = "23 days"
         times = to_datetime(
@@ -159,16 +172,40 @@ class TestGroupbyEWMMean:
                 "2020-01-03",
             ]
         )
-        df = DataFrame({"A": ["a", "b", "a", "b", "b", "a"], "B": [0, 0, 1, 1, 2, 2]})
+        df = DataFrame(
+            {"A": ["a", "b", "a", "b", "b", "a"], "B": [0, 0, 1, np.nan, 2, 2]}
+        )
         gb_ewm = df.groupby("A").ewm(
             halflife=halflife, adjust=True, ignore_na=ignore_na, times=times
         )
 
         engine_kwargs = {"nogil": nogil, "parallel": parallel, "nopython": nopython}
-        result = gb_ewm.mean(engine="numba", engine_kwargs=engine_kwargs)
-        expected = gb_ewm.mean(engine="cython")
+        result = gb_ewm.mean(
+            initialize=initialize, engine="numba", engine_kwargs=engine_kwargs
+        )
+        expected = gb_ewm.mean(initialize=initialize, engine="cython")
 
         tm.assert_frame_equal(result, expected)
+
+    @pytest.mark.parametrize("initialize", [2.0, "longterm_mean"])
+    def test_invalid_initialize_times(self, initialize):
+        df = DataFrame({"A": ["a", "b", "a", "b"], "B": range(4)})
+        with pytest.raises(
+            NotImplementedError,
+            match="initialize is not supported with non-None times.",
+        ):
+            df.groupby("A").ewm(
+                halflife="1 day", times=date_range("2000", freq="D", periods=4)
+            ).mean(engine="numba", engine_kwargs={}, initialize=initialize)
+
+    def test_invalid_initialize(self):
+        df = DataFrame({"A": ["a", "b", "a", "b"], "B": range(4)})
+        with pytest.raises(
+            ValueError, match="initialize must be a string, number or None."
+        ):
+            df.groupby("A").ewm(com=0.5).mean(
+                engine="numba", engine_kwargs={}, initialize=Series()
+            )
 
 
 @td.skip_if_no("numba", "0.46.0")

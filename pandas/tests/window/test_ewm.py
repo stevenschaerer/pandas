@@ -14,10 +14,16 @@ from pandas.core.window import ExponentialMovingWindow
 
 
 def test_doc_string():
-
     df = DataFrame({"B": [0, 1, 2, np.nan, 4]})
     df
-    df.ewm(com=0.5).mean()
+    times = ["2020-01-01", "2020-01-03", "2020-01-10", "2020-01-15", "2020-01-17"]
+    df.ewm(halflife="4 days", times=DatetimeIndex(times)).mean()
+
+    ewm = DataFrame({"B": [0, np.nan, 2, 3, 4]}).ewm(com=0.5, min_periods=2)
+    ewm.mean()
+    ewm.mean(initialize=2)
+    ewm.mean(initialize="longterm_mean")
+    ewm.mean(initialize="simple_mean")
 
 
 def test_constructor(frame_or_series):
@@ -111,13 +117,18 @@ def test_ewma_halflife_without_times(halflife_with_times):
     ],
 )
 @pytest.mark.parametrize("min_periods", [0, 2])
-def test_ewma_with_times_equal_spacing(halflife_with_times, times, min_periods):
+@pytest.mark.parametrize("initialize", [None, "simple_mean"])
+def test_ewma_with_times_equal_spacing(
+    halflife_with_times, times, min_periods, initialize
+):
     halflife = halflife_with_times
     data = np.arange(10.0)
     data[::2] = np.nan
     df = DataFrame({"A": data, "time_col": date_range("2000", freq="D", periods=10)})
-    result = df.ewm(halflife=halflife, min_periods=min_periods, times=times).mean()
-    expected = df.ewm(halflife=1.0, min_periods=min_periods).mean()
+    result = df.ewm(halflife=halflife, min_periods=min_periods, times=times).mean(
+        initialize=initialize
+    )
+    expected = df.ewm(halflife=1.0, min_periods=min_periods).mean(initialize=initialize)
     tm.assert_frame_equal(result, expected)
 
 
@@ -181,3 +192,34 @@ def test_ewma_times_adjust_false_raises():
         Series(range(1)).ewm(
             0.1, adjust=False, times=date_range("2000", freq="D", periods=1)
         )
+
+
+@pytest.mark.parametrize("initialize", [2.0, "longterm_mean"])
+def test_ewma_initialize_times_raises(initialize):
+    # GH 13638
+    with pytest.raises(
+        NotImplementedError, match="initialize is not supported with non-None times."
+    ):
+        Series(range(1)).ewm(
+            halflife="1 day", times=date_range("2000", freq="D", periods=1)
+        ).mean(initialize=initialize)
+
+
+def test_ewma_initialize_unsupported_raises():
+    # GH 13638
+    with pytest.raises(
+        ValueError, match="initialize must be a string, number or None."
+    ):
+        Series(range(1)).ewm(com=0.5).mean(initialize=Series())
+
+
+def test_ewma_initialize_simplemean_with_times():
+    halflife = "23 days"
+    times = DatetimeIndex(["2020-01-01", "2020-01-10T00:04:05", "2020-02-23T05:00:23"])
+    data = np.arange(3)
+    df = DataFrame(data)
+    result = df.ewm(halflife=halflife, times=times, min_periods=2).mean(
+        initialize="simple_mean"
+    )
+    expected = DataFrame([np.nan, 0.5, 1.6868118550418547])
+    tm.assert_frame_equal(result, expected)

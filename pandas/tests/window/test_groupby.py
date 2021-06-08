@@ -964,13 +964,23 @@ class TestEWM:
         )
         tm.assert_frame_equal(result, expected)
 
-    def test_times_vs_apply(self, times_frame):
+    @pytest.mark.parametrize("initialize", [None, "simple_mean"])
+    @pytest.mark.parametrize("min_periods", [0, 2])
+    def test_times_vs_apply(self, times_frame, initialize, min_periods):
         # GH 40951
         halflife = "23 days"
-        result = times_frame.groupby("A").ewm(halflife=halflife, times="C").mean()
+        result = (
+            times_frame.groupby("A")
+            .ewm(halflife=halflife, times="C", min_periods=min_periods)
+            .mean(initialize=initialize)
+        )
         expected = (
             times_frame.groupby("A")
-            .apply(lambda x: x.ewm(halflife=halflife, times="C").mean())
+            .apply(
+                lambda x: x.ewm(
+                    halflife=halflife, times="C", min_periods=min_periods
+                ).mean(initialize=initialize)
+            )
             .iloc[[0, 3, 6, 9, 1, 4, 7, 2, 5, 8]]
             .reset_index(drop=True)
         )

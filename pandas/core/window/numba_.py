@@ -5,6 +5,7 @@ from typing import (
     Dict,
     Optional,
     Tuple,
+    Union,
 )
 
 import numpy as np
@@ -86,6 +87,7 @@ def generate_numba_groupby_ewma_func(
     adjust: bool,
     ignore_na: bool,
     deltas: np.ndarray,
+    initialize: Optional[Union[float, str]],
 ):
     """
     Generate a numba jitted groupby ewma function specified by values
@@ -99,6 +101,7 @@ def generate_numba_groupby_ewma_func(
     adjust : bool
     ignore_na : bool
     deltas : numpy.ndarray
+    initialize: float, str, optional
 
     Returns
     -------
@@ -113,6 +116,64 @@ def generate_numba_groupby_ewma_func(
     numba = import_optional_dependency("numba")
 
     @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)
+    def initialize_standard(
+        values: np.ndarray,
+        initialize: Optional[Union[float, str]],
+        minimum_periods: int,
+    ) -> Tuple[float, int, int]:
+        return values[0], 1, int(values[0] == values[0])
+
+    @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)
+    def initialize_with_value(
+        values: np.ndarray, initialize: float, minimum_periods: int
+    ) -> Tuple[float, int, int]:
+        return initialize, 0, int(initialize == initialize)
+
+    @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)
+    def initialize_longtermmean(
+        values: np.ndarray, initialize: str, minimum_periods: int
+    ) -> Tuple[float, int, int]:
+        init_val = np.nanmean(values)
+        return init_val, 0, int(init_val == init_val)
+
+    @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)
+    def initialize_simplemean(
+        values: np.ndarray, initialize: str, minimum_periods: int
+    ) -> Tuple[float, int, int]:
+        nobs = 0
+        sum_val = 0
+        N = len(values)
+        for i in range(N):
+            cur = values[i]
+            is_observation = not np.isnan(cur)
+            nobs += is_observation
+            if is_observation:
+                sum_val += cur
+                if nobs == minimum_periods:
+                    return sum_val / minimum_periods, i + 1, nobs
+        return np.nan, N, 0
+
+    def get_initialize_function(
+        initialize: Optional[Union[float, str]]
+    ) -> Tuple[int, Callable]:
+        if initialize is None:
+            prepend_observation = False
+            func_initialize = initialize_standard
+        elif isinstance(initialize, str):
+            if initialize == "longterm_mean":
+                prepend_observation = True
+                func_initialize = initialize_longtermmean
+            else:
+                prepend_observation = False
+                func_initialize = initialize_simplemean
+        else:
+            prepend_observation = True
+            func_initialize = initialize_with_value
+        return prepend_observation, func_initialize
+
+    prepend_observation, func_initialize = get_initialize_function(initialize)
+
+    @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)
     def groupby_ewma(
         values: np.ndarray,
         begin: np.ndarray,
@@ -121,21 +182,37 @@ def generate_numba_groupby_ewma_func(
     ) -> np.ndarray:
         result = np.empty(len(values))
         alpha = 1.0 / (1.0 + com)
+
+        init_shift = int(prepend_observation)
         for i in numba.prange(len(begin)):
             start = begin[i]
             stop = end[i]
             window = values[start:stop]
-            sub_result = np.empty(len(window))
+            if not prepend_observation:
+                # note that len(deltas) = len(vals) - 1 and deltas[i] is to be
+                # used in conjunction with vals[i+1]
+                sub_deltas = deltas[start : stop - 1]
+            else:
+                # if an initial value is prepended then scaling by times, i.e.,
+                # non-constant 1 deltas are not supported. set deltas to constant 1
+                sub_deltas = np.ones(len(window))
+            sub_result = np.empty(len(window) + init_shift)
 
             old_wt_factor = 1.0 - alpha
             new_wt = 1.0 if adjust else alpha
 
-            weighted_avg = window[0]
-            nobs = int(not np.isnan(weighted_avg))
-            sub_result[0] = weighted_avg if nobs >= minimum_periods else np.nan
+            weighted_avg, start_idx, nobs = func_initialize(
+                window, initialize, minimum_periods
+            )
+            sub_result[start_idx - 1 + init_shift] = (
+                weighted_avg if nobs >= minimum_periods else np.nan
+            )
+            for j in range(start_idx - 1 + init_shift):
+                sub_result[j] = np.nan
+
             old_wt = 1.0
 
-            for j in range(1, len(window)):
+            for j in range(start_idx, len(window)):
                 cur = window[j]
                 is_observation = not np.isnan(cur)
                 nobs += is_observation
@@ -143,9 +220,7 @@ def generate_numba_groupby_ewma_func(
 
                     if is_observation or not ignore_na:
 
-                        # note that len(deltas) = len(vals) - 1 and deltas[i] is to be
-                        # used in conjunction with vals[i+1]
-                        old_wt *= old_wt_factor ** deltas[start + j - 1]
+                        old_wt *= old_wt_factor ** sub_deltas[j - 1 + init_shift]
                         if is_observation:
 
                             # avoid numerical errors on constant series
@@ -160,9 +235,11 @@ def generate_numba_groupby_ewma_func(
                 elif is_observation:
                     weighted_avg = cur
 
-                sub_result[j] = weighted_avg if nobs >= minimum_periods else np.nan
+                sub_result[j + init_shift] = (
+                    weighted_avg if nobs >= minimum_periods else np.nan
+                )
 
-            result[start:stop] = sub_result
+            result[start:stop] = sub_result[init_shift:]
 
         return result
 

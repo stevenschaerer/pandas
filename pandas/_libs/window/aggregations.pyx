@@ -1469,10 +1469,99 @@ def roll_weighted_var(const float64_t[:] values, const float64_t[:] weights,
 
 # ----------------------------------------------------------------------
 # Exponentially weighted moving average
+cdef inline (float64_t, int64_t, int64_t) initialize_standard(
+    const float64_t[:] vals,
+    object initialize,
+    const int minp
+):
+    """
+    Convenience routine for initializing as per standard methodology
+    """
+    return vals[0], 1, int(vals[0] == vals[0])
+
+cdef inline (float64_t, int64_t, int64_t) initialize_with_value(
+    const float64_t[:] vals,
+    object initialize,
+    const int minp
+):
+    """
+    Convenience routine for initializing with a given value
+    """
+    return initialize, 0, int(initialize == initialize)
+
+cdef inline (float64_t, int64_t, int64_t) initialize_longtermmean(
+    const float64_t[:] vals,
+    object initialize,
+    const int minp
+):
+    """
+    Convenience routine for initializing with the long-term mean of the time series
+    """
+    cdef:
+        float64_t init_val
+    init_val = np.nanmean(vals)
+    return init_val, 0, int(init_val == init_val)
+
+cdef inline (float64_t, int64_t, int64_t) initialize_simplemean(
+    const float64_t[:] vals,
+    object initialize,
+    const int minp
+):
+    """
+    Convenience routine for initializing with the mean of the first non-null minp 
+    values of the time series
+    """
+    cdef:
+        Py_ssize_t i, idx, nobs, N = len(vals)
+        float64_t sum_val, cur
+        bint is_observation
+
+    nobs = 0
+    sum_val = 0
+    with nogil:
+        for i in range(N):
+            cur = vals[i]
+            is_observation = cur == cur
+            nobs += is_observation
+            if is_observation:
+                sum_val += cur
+                if nobs == minp:
+                    return sum_val / minp, i+1, nobs
+    return NaN, N, 0
+
+ctypedef (float64_t, int64_t, int64_t) (*init_fun) (const float64_t[:], object,
+                                                    const int)
+
+cdef inline (bint, init_fun) generate_initialize(
+    object initialize
+):
+    """
+    Convenience routine to fetch an initialization function
+    """
+    cdef:
+        bint prepend_observation
+        (float64_t, int64_t, int64_t) (*func_initialize)(const float64_t[:], object,
+                                                         const int)
+
+    if initialize is None:
+        prepend_observation = False
+        func_initialize = initialize_standard
+    elif isinstance(initialize, str):
+        if initialize == 'longterm_mean':
+            prepend_observation = True
+            func_initialize = initialize_longtermmean
+        else:
+            prepend_observation = False
+            func_initialize = initialize_simplemean
+    else:
+        prepend_observation = True
+        func_initialize = initialize_with_value
+    return prepend_observation, func_initialize
+
 
 def ewma(const float64_t[:] vals, const int64_t[:] start, const int64_t[:] end,
          int minp, float64_t com, bint adjust, bint ignore_na,
-         const float64_t[:] deltas):
+         const float64_t[:] deltas, object initialize):
     """
     Compute exponentially-weighted moving average using center-of-mass.
 
@@ -1486,6 +1575,7 @@ def ewma(const float64_t[:] vals, const int64_t[:] start, const int64_t[:] end,
     adjust : bool
     ignore_na : bool
     deltas : ndarray (float64 type)
+    initialize: object
 
     Returns
     -------
@@ -1494,10 +1584,12 @@ def ewma(const float64_t[:] vals, const int64_t[:] start, const int64_t[:] end,
 
     cdef:
         Py_ssize_t i, j, s, e, nobs, win_size, N = len(vals), M = len(start)
+        Py_ssize_t init_shift, start_idx
         const float64_t[:] sub_deltas, sub_vals
         ndarray[float64_t] sub_output, output = np.empty(N, dtype=float)
         float64_t alpha, old_wt_factor, new_wt, weighted_avg, old_wt, cur
-        bint is_observation
+        bint is_observation, prepend_observation
+        init_fun func_initialize
 
     if N == 0:
         return output
@@ -1506,31 +1598,41 @@ def ewma(const float64_t[:] vals, const int64_t[:] start, const int64_t[:] end,
     old_wt_factor = 1. - alpha
     new_wt = 1. if adjust else alpha
 
+    prepend_observation, func_initialize = generate_initialize(initialize)
+    # if an observation is prepended to the time series then some indices need to be
+    # shifted by one
+    init_shift = int(prepend_observation)
+
     for j in range(M):
         s = start[j]
         e = end[j]
         sub_vals = vals[s:e]
-        # note that len(deltas) = len(vals) - 1 and deltas[i] is to be used in
-        # conjunction with vals[i+1]
-        sub_deltas = deltas[s:e - 1]
         win_size = len(sub_vals)
-        sub_output = np.empty(win_size, dtype=float)
-
-        weighted_avg = sub_vals[0]
-        is_observation = weighted_avg == weighted_avg
-        nobs = int(is_observation)
-        sub_output[0] = weighted_avg if nobs >= minp else NaN
+        if not prepend_observation:
+            # note that len(deltas) = len(vals) - 1 and deltas[i] is to be used in
+            # conjunction with vals[i+1]
+            sub_deltas = deltas[s:e - 1]
+        else:
+            # if an initial value is prepended then scaling by times, i.e.,
+            # non-constant 1 deltas are not supported. set deltas to constant 1
+            sub_deltas = np.ones(win_size, dtype=float)
+        sub_output = np.empty(win_size + init_shift, dtype=float)
+        weighted_avg, start_idx, nobs = func_initialize(sub_vals, initialize, minp)
+        sub_output[start_idx - 1 + init_shift] = weighted_avg if nobs >= minp else NaN
+        with nogil:
+            for i in range(start_idx - 1 + init_shift):
+                sub_output[i] = NaN
         old_wt = 1.
 
         with nogil:
-            for i in range(1, win_size):
+            for i in range(start_idx, win_size):
                 cur = sub_vals[i]
                 is_observation = cur == cur
                 nobs += is_observation
                 if weighted_avg == weighted_avg:
 
                     if is_observation or not ignore_na:
-                        old_wt *= old_wt_factor ** sub_deltas[i - 1]
+                        old_wt *= old_wt_factor ** sub_deltas[i - 1 + init_shift]
                         if is_observation:
 
                             # avoid numerical errors on constant series
@@ -1544,9 +1646,9 @@ def ewma(const float64_t[:] vals, const int64_t[:] start, const int64_t[:] end,
                 elif is_observation:
                     weighted_avg = cur
 
-                sub_output[i] = weighted_avg if nobs >= minp else NaN
+                sub_output[i + init_shift] = weighted_avg if nobs >= minp else NaN
 
-        output[s:e] = sub_output
+        output[s:e] = sub_output[init_shift:]
 
     return output
 

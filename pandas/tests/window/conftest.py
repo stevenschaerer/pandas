@@ -121,6 +121,12 @@ def ignore_na(request):
     return request.param
 
 
+@pytest.fixture(params=[None, 2.0, "simple_mean", "longterm_mean"])
+def initialize(request):
+    """initialize keyword argument for ewm mean"""
+    return request.param
+
+
 @pytest.fixture(
     params=[pytest.param("numba", marks=td.skip_if_no("numba", "0.46.0")), "cython"]
 )

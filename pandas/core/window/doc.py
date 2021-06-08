@@ -117,3 +117,42 @@ window_agg_numba_parameters = dedent(
           .. versionadded:: 1.3.0\n
     """
 ).replace("\n", "", 1)
+
+ewm_numba_parameters = dedent(
+    """
+    engine : str, default None
+        * ``'cython'`` : Runs mean through C-extensions from cython.
+        * ``'numba'`` : Runs mean through JIT compiled code from numba.
+          Only available when ``raw`` is set to ``True``.
+        * ``None`` : Defaults to ``'cython'`` or globally setting
+          ``compute.use_numba``
+
+          .. versionadded:: 1.2.0
+
+    engine_kwargs : dict, default None
+        * For ``'cython'`` engine, there are no accepted ``engine_kwargs``
+        * For ``'numba'`` engine, the engine can accept ``nopython``, ``nogil``
+          and ``parallel`` dictionary keys. The values must either be ``True`` or
+          ``False``. The default ``engine_kwargs`` for the ``'numba'`` engine is
+          ``{{'nopython': True, 'nogil': False, 'parallel': False}}``
+
+          .. versionadded:: 1.2.0\n
+    """
+).replace("\n", "", 1)
+
+initialize_parameter = dedent(
+    """
+        initialize : float, str, default None
+            This optional parameter specifies how to initialize the mean time
+            series:
+                * ``float``: Initialize with the provided number
+                * ``'simple_mean'``: The first :math:`\\max(1, \\text{{simple_mean}})`
+                  non-null mean values will be calculated as a simple,
+                  non-exponentially weighted average.
+                * ``'longterm_mean'``: Initialize with the mean over the whole value
+                  time series.
+                * ``None``: Initialize with the first value of the value time series.
+
+            .. versionadded:: 1.3.0
+    """
+).replace("\n", "", 1)

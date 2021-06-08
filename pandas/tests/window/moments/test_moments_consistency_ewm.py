@@ -70,6 +70,59 @@ def test_different_input_array_raise_exception(name):
         getattr(A.ewm(com=20, min_periods=5), name)(np.random.randn(50))
 
 
+def create_mock_init(obj, initialize, min_periods):
+    if initialize is None:
+        return obj, False, min_periods
+
+    if isinstance(obj, DataFrame):
+        if not len(obj.columns):
+            return DataFrame(index=obj.index, columns=obj.columns), False, min_periods
+        obj_with_init = concat(
+            [
+                create_mock_series_init(
+                    obj.iloc[:, i], initialize=initialize, min_periods=min_periods
+                )
+                for i, _ in enumerate(obj.columns)
+            ],
+            axis=1,
+        )
+        if len(obj_with_init.index) == len(obj.index):
+            obj_with_init.index = obj.index
+        obj_with_init.columns = obj.columns
+    else:
+        obj_with_init = create_mock_series_init(obj, initialize, min_periods)
+
+    init_with_num = not isinstance(initialize, str)
+    prepend_observation = init_with_num or initialize == "longterm_mean"
+    min_periods = min_periods if init_with_num or initialize == "longterm_mean" else 0
+    return obj_with_init, prepend_observation, min_periods
+
+
+def create_mock_series_init(s, initialize, min_periods):
+    if isinstance(initialize, str):
+        if initialize == "longterm_mean":
+            init_val = np.nan if s.empty else np.nanmean(s.values)
+        else:
+            min_periods = max(min_periods, 1)
+            n_obs = 0
+            init_val = 0
+            vals = s.values.astype("float64")
+            for i in range(len(vals)):
+                if vals[i] == vals[i]:
+                    n_obs += 1
+                    init_val += vals[i]
+                    if n_obs == min_periods:
+                        init_val /= min_periods
+                        vals[i] = init_val
+                        break
+                    else:
+                        vals[i] = np.nan
+            return Series(vals, index=s.index)
+    else:
+        init_val = initialize
+    return Series(np.append(init_val, s.values))
+
+
 def create_mock_weights(obj, com, adjust, ignore_na):
     if isinstance(obj, DataFrame):
         if not len(obj.columns):
@@ -120,25 +173,32 @@ def create_mock_series_weights(s, com, adjust, ignore_na):
 
 
 @pytest.mark.parametrize("min_periods", [0, 1, 2, 3, 4])
-def test_ewm_consistency_mean(consistency_data, adjust, ignore_na, min_periods):
+def test_ewm_consistency_mean(
+    consistency_data, adjust, ignore_na, min_periods, initialize
+):
     x, is_constant, no_nans = consistency_data
     com = 3.0
 
     result = x.ewm(
         com=com, min_periods=min_periods, adjust=adjust, ignore_na=ignore_na
-    ).mean()
-    weights = create_mock_weights(x, com=com, adjust=adjust, ignore_na=ignore_na)
+    ).mean(initialize=initialize)
+    y, is_prepend, min_periods = create_mock_init(
+        x, initialize=initialize, min_periods=min_periods
+    )
+    weights = create_mock_weights(y, com=com, adjust=adjust, ignore_na=ignore_na)
     expected = (
-        x.multiply(weights).cumsum().divide(weights.cumsum()).fillna(method="ffill")
+        y.multiply(weights).cumsum().divide(weights.cumsum()).fillna(method="ffill")
     )
     expected[
-        x.expanding().count() < (max(min_periods, 1) if min_periods else 1)
+        y.expanding().count() < (max(min_periods, 1) if min_periods else 1)
     ] = np.nan
+    if is_prepend:
+        expected = expected.iloc[1:].reset_index(drop=True).reindex(x.index)
     tm.assert_equal(result, expected.astype("float64"))
 
 
 @pytest.mark.parametrize("min_periods", [0, 1, 2, 3, 4])
-def test_ewm_consistency_consistent(consistency_data, adjust, ignore_na, min_periods):
+def test_ewm_consistency_constant(consistency_data, adjust, ignore_na, min_periods):
     x, is_constant, no_nans = consistency_data
     com = 3.0
 
