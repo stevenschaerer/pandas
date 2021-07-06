@@ -146,9 +146,9 @@ def generate_numba_groupby_ewma_func(
         for i in range(N):
             cur = values[i]
             is_observation = not np.isnan(cur)
-            nobs += is_observation
             if is_observation:
                 sum_val += cur
+                nobs += 1
                 if nobs == minimum_periods:
                     return sum_val / minimum_periods, i + 1, nobs
         return np.nan, N, 0
