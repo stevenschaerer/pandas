@@ -5006,6 +5006,7 @@ Keep all original rows and also all original values
         inplace: Literal[False] = ...,
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> Series:
         ...
 
@@ -5018,6 +5019,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5028,6 +5030,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5039,6 +5042,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5050,6 +5054,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5061,6 +5066,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5073,6 +5079,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5085,6 +5092,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5097,6 +5105,7 @@ Keep all original rows and also all original values
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5109,6 +5118,7 @@ Keep all original rows and also all original values
         inplace: bool = ...,
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> Series | None:
         ...
 
@@ -5123,6 +5133,7 @@ Keep all original rows and also all original values
         inplace=False,
         limit=None,
         downcast=None,
+        fill_partial: bool = True,
     ) -> Series | None:
         return super().fillna(
             value=value,
@@ -5131,6 +5142,7 @@ Keep all original rows and also all original values
             inplace=inplace,
             limit=limit,
             downcast=downcast,
+            fill_partial=fill_partial,
         )
 
     def pop(self, item: Hashable) -> Any:

@@ -821,7 +821,11 @@ def interpolate_2d(
 
 
 def _fillna_prep(
-    values, mask: npt.NDArray[np.bool_] | None = None
+    values,
+    mask: npt.NDArray[np.bool_] | None,
+    limit: int | None,
+    fill_partial: bool,
+    is_forward: bool,
 ) -> npt.NDArray[np.bool_]:
     # boilerplate for _pad_1d, _backfill_1d, _pad_2d, _backfill_2d
 
@@ -829,6 +833,9 @@ def _fillna_prep(
         mask = isna(values)
 
     mask = mask.view(np.uint8)
+
+    if not fill_partial and limit is not None:
+        pass
     return mask
 
 
@@ -857,8 +864,11 @@ def _pad_1d(
     values: np.ndarray,
     limit: int | None = None,
     mask: npt.NDArray[np.bool_] | None = None,
+    fill_partial: bool = True,
 ) -> tuple[np.ndarray, npt.NDArray[np.bool_]]:
-    mask = _fillna_prep(values, mask)
+    mask = _fillna_prep(
+        values, mask, limit=limit, fill_partial=fill_partial, is_forward=True
+    )
     algos.pad_inplace(values, mask, limit=limit)
     return values, mask
 
@@ -868,15 +878,25 @@ def _backfill_1d(
     values: np.ndarray,
     limit: int | None = None,
     mask: npt.NDArray[np.bool_] | None = None,
+    fill_partial: bool = True,
 ) -> tuple[np.ndarray, npt.NDArray[np.bool_]]:
-    mask = _fillna_prep(values, mask)
+    mask = _fillna_prep(
+        values, mask, limit=limit, fill_partial=fill_partial, is_forward=False
+    )
     algos.backfill_inplace(values, mask, limit=limit)
     return values, mask
 
 
 @_datetimelike_compat
-def _pad_2d(values: np.ndarray, limit=None, mask: npt.NDArray[np.bool_] | None = None):
-    mask = _fillna_prep(values, mask)
+def _pad_2d(
+    values: np.ndarray,
+    limit=None,
+    mask: npt.NDArray[np.bool_] | None = None,
+    fill_partial: bool = True,
+):
+    mask = _fillna_prep(
+        values, mask, limit=limit, fill_partial=fill_partial, is_forward=True
+    )
 
     if np.all(values.shape):
         algos.pad_2d_inplace(values, mask, limit=limit)
@@ -887,8 +907,15 @@ def _pad_2d(values: np.ndarray, limit=None, mask: npt.NDArray[np.bool_] | None =
 
 
 @_datetimelike_compat
-def _backfill_2d(values, limit=None, mask: npt.NDArray[np.bool_] | None = None):
-    mask = _fillna_prep(values, mask)
+def _backfill_2d(
+    values,
+    limit=None,
+    mask: npt.NDArray[np.bool_] | None = None,
+    fill_partial: bool = True,
+):
+    mask = _fillna_prep(
+        values, mask, limit=limit, fill_partial=fill_partial, is_forward=False
+    )
 
     if np.all(values.shape):
         algos.backfill_2d_inplace(values, mask, limit=limit)

@@ -5273,6 +5273,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[False] = ...,
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> DataFrame:
         ...
 
@@ -5285,6 +5286,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5295,6 +5297,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5306,6 +5309,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5317,6 +5321,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5328,6 +5333,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5340,6 +5346,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5352,6 +5359,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5364,6 +5372,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: Literal[True],
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> None:
         ...
 
@@ -5376,6 +5385,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: bool = ...,
         limit=...,
         downcast=...,
+        fill_partial: bool = ...,
     ) -> DataFrame | None:
         ...
 
@@ -5389,6 +5399,7 @@ class DataFrame(NDFrame, OpsMixin):
         inplace: bool = False,
         limit=None,
         downcast=None,
+        fill_partial: bool = True,
     ) -> DataFrame | None:
         return super().fillna(
             value=value,
@@ -5397,6 +5408,7 @@ class DataFrame(NDFrame, OpsMixin):
             inplace=inplace,
             limit=limit,
             downcast=downcast,
+            fill_partial=fill_partial,
         )
 
     def pop(self, item: Hashable) -> Series:

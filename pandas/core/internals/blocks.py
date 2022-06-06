@@ -1145,7 +1145,12 @@ class Block(PandasObject):
         return [self.make_block(result)]
 
     def fillna(
-        self, value, limit: int | None = None, inplace: bool = False, downcast=None
+        self,
+        value,
+        limit: int | None = None,
+        inplace: bool = False,
+        downcast=None,
+        fill_partial: bool = True,
     ) -> list[Block]:
         """
         fillna on the block with the value. If we fail, then convert to
@@ -1539,13 +1544,20 @@ class EABackedBlock(Block):
         return [self]
 
     def fillna(
-        self, value, limit: int | None = None, inplace: bool = False, downcast=None
+        self,
+        value,
+        limit: int | None = None,
+        inplace: bool = False,
+        downcast=None,
+        fill_partial: bool = True,
     ) -> list[Block]:
         # Caller is responsible for validating limit; if int it is strictly positive
 
         if self.dtype.kind == "m":
             try:
-                res_values = self.values.fillna(value, limit=limit)
+                res_values = self.values.fillna(
+                    value, limit=limit, fill_partial=fill_partial
+                )
             except (ValueError, TypeError):
                 # GH#45746
                 warnings.warn(
@@ -1565,7 +1577,13 @@ class EABackedBlock(Block):
         # TODO: since this now dispatches to super, which in turn dispatches
         #  to putmask, it may *actually* respect 'inplace=True'. If so, add
         #  tests for this.
-        return super().fillna(value, limit=limit, inplace=inplace, downcast=downcast)
+        return super().fillna(
+            value,
+            limit=limit,
+            inplace=inplace,
+            downcast=downcast,
+            fill_partial=fill_partial,
+        )
 
     def delete(self, loc) -> Block:
         # This will be unnecessary if/when __array_function__ is implemented

@@ -310,7 +310,11 @@ class NDArrayBackedExtensionArray(NDArrayBacked, ExtensionArray):
 
     @doc(ExtensionArray.fillna)
     def fillna(
-        self: NDArrayBackedExtensionArrayT, value=None, method=None, limit=None
+        self: NDArrayBackedExtensionArrayT,
+        value=None,
+        method=None,
+        limit=None,
+        fill_partial: bool = True,
     ) -> NDArrayBackedExtensionArrayT:
         value, method = validate_fillna_kwargs(
             value, method, validate_scalar_dict_value=False
@@ -329,7 +333,7 @@ class NDArrayBackedExtensionArray(NDArrayBacked, ExtensionArray):
                 # (for now) when self.ndim == 2, we assume axis=0
                 func = missing.get_fill_func(method, ndim=self.ndim)
                 npvalues = self._ndarray.T.copy()
-                func(npvalues, limit=limit, mask=mask.T)
+                func(npvalues, limit=limit, mask=mask.T, fill_partial=fill_partial)
                 npvalues = npvalues.T
 
                 # TODO: PandasArray didn't used to copy, need tests for this

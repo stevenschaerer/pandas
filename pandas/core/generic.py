@@ -6343,6 +6343,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         inplace: bool_t = False,
         limit=None,
         downcast=None,
+        fill_partial: bool_t = True,
     ) -> NDFrameT | None:
         """
         Fill NA/NaN values using the specified method.
@@ -6377,6 +6378,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
             A dict of item->dtype of what to downcast if possible,
             or the string 'infer' which will try to downcast to an appropriate
             equal type (e.g. float64 to int64 if possible).
+        fill_partial : bool, default True
+            If False, do not fill values in a gap of NaN values if there are
+            more than limit consecutive NaN values
 
         Returns
         -------
@@ -6469,7 +6473,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
             if not self._mgr.is_single_block and axis == 1:
                 if inplace:
                     raise NotImplementedError()
-                result = self.T.fillna(method=method, limit=limit).T
+                result = self.T.fillna(
+                    method=method, limit=limit, fill_partial=fill_partial
+                ).T
 
                 return result
 
@@ -6479,6 +6485,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
                 limit=limit,
                 inplace=inplace,
                 downcast=downcast,
+                fill_partial=fill_partial,
             )
         else:
             if self.ndim == 1:
@@ -6503,7 +6510,11 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
                     )
 
                 new_data = self._mgr.fillna(
-                    value=value, limit=limit, inplace=inplace, downcast=downcast
+                    value=value,
+                    limit=limit,
+                    inplace=inplace,
+                    downcast=downcast,
+                    fill_partial=fill_partial,
                 )
 
             elif isinstance(value, (dict, ABCSeries)):
@@ -6520,7 +6531,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
                     if k not in result:
                         continue
                     downcast_k = downcast if not is_dict else downcast.get(k)
-                    result[k] = result[k].fillna(v, limit=limit, downcast=downcast_k)
+                    result[k] = result[k].fillna(
+                        v, limit=limit, downcast=downcast_k, fill_partial=fill_partial
+                    )
                 return result if not inplace else None
 
             elif not is_list_like(value):
@@ -6532,7 +6545,11 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
                 else:
 
                     new_data = self._mgr.fillna(
-                        value=value, limit=limit, inplace=inplace, downcast=downcast
+                        value=value,
+                        limit=limit,
+                        inplace=inplace,
+                        downcast=downcast,
+                        fill_partial=fill_partial,
                     )
             elif isinstance(value, ABCDataFrame) and self.ndim == 2:
 
