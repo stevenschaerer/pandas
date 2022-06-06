@@ -6371,9 +6371,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
             If method is specified, this is the maximum number of consecutive
             NaN values to forward/backward fill. In other words, if there is
             a gap with more than this number of consecutive NaNs, it will only
-            be partially filled. If method is not specified, this is the
-            maximum number of entries along the entire axis where NaNs will be
-            filled. Must be greater than 0 if not None.
+            be partially filled (if fill_partial is True). If method is not
+            specified, this is the maximum number of entries along the entire
+            axis where NaNs will be filled. Must be greater than 0 if not None.
         downcast : dict, default is None
             A dict of item->dtype of what to downcast if possible,
             or the string 'infer' which will try to downcast to an appropriate

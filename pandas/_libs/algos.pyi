@@ -96,6 +96,14 @@ def is_monotonic(
     arr: np.ndarray,  # ndarray[numeric_object_t, ndim=1]
     timelike: bool,
 ) -> tuple[bool, bool, bool]: ...
+def mask_enforce_full_fill_1d(
+    mask: np.ndarray,  # uint8_t[:]
+    limit=...,
+) -> None: ...
+def mask_enforce_full_fill_2d(
+    mask: np.ndarray,  # const uint8_t[:, :]
+    limit=...,
+) -> None: ...
 
 # ----------------------------------------------------------------------
 # rank_1d, rank_2d
