@@ -166,6 +166,7 @@ def group_median_float64(
     Py_ssize_t min_count=-1,
     const uint8_t[:, :] mask=None,
     uint8_t[:, ::1] result_mask=None,
+    bint skipna=True,
 ) -> None:
     """
     Only aggregates on axis=0
@@ -674,6 +675,7 @@ def group_sum(
     uint8_t[:, ::1] result_mask=None,
     Py_ssize_t min_count=0,
     bint is_datetimelike=False,
+    bint skipna=True,
 ) -> None:
     """
     Only aggregates on axis=0 using Kahan summation
@@ -739,6 +741,8 @@ def group_sum(
                             # because of no gil
                             compensation[lab, j] = 0
                         sumx[lab, j] = t
+                elif skipna:
+                    pass
 
     _check_below_mincount(
         out, uses_mask, result_mask, ncounts, K, nobs, min_count, sumx
@@ -755,6 +759,7 @@ def group_prod(
     const uint8_t[:, ::1] mask,
     uint8_t[:, ::1] result_mask=None,
     Py_ssize_t min_count=0,
+    bint skipna=True,
 ) -> None:
     """
     Only aggregates on axis=0
@@ -813,6 +818,7 @@ def group_var(
     uint8_t[:, ::1] result_mask=None,
     bint is_datetimelike=False,
     str name="var",
+    bint skipna=True,
 ) -> None:
     cdef:
         Py_ssize_t i, j, N, K, lab, ncounts = len(counts)
@@ -980,6 +986,7 @@ def group_mean(
     bint is_datetimelike=False,
     const uint8_t[:, ::1] mask=None,
     uint8_t[:, ::1] result_mask=None,
+    bint skipna=True,
 ) -> None:
     """
     Compute the mean per label given a label assignment for each value.
@@ -1646,6 +1653,7 @@ cdef group_min_max(
     bint compute_max=True,
     const uint8_t[:, ::1] mask=None,
     uint8_t[:, ::1] result_mask=None,
+    bint skipna=True,
 ):
     """
     Compute minimum/maximum  of columns of `values`, in row groups `labels`.
@@ -1852,6 +1860,7 @@ def group_max(
     bint is_datetimelike=False,
     const uint8_t[:, ::1] mask=None,
     uint8_t[:, ::1] result_mask=None,
+    bint skipna=True,
 ) -> None:
     """See group_min_max.__doc__"""
     group_min_max(
@@ -1864,6 +1873,7 @@ def group_max(
         compute_max=True,
         mask=mask,
         result_mask=result_mask,
+        skipna=skipna,
     )
 
 
@@ -1878,6 +1888,7 @@ def group_min(
     bint is_datetimelike=False,
     const uint8_t[:, ::1] mask=None,
     uint8_t[:, ::1] result_mask=None,
+    bint skipna=True,
 ) -> None:
     """See group_min_max.__doc__"""
     group_min_max(
@@ -1890,6 +1901,7 @@ def group_min(
         compute_max=False,
         mask=mask,
         result_mask=result_mask,
+        skipna=skipna,
     )
 
 

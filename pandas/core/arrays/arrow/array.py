@@ -2242,6 +2242,7 @@ class ArrowExtensionArray(
         min_count: int,
         ngroups: int,
         ids: npt.NDArray[np.intp],
+        skipna: bool,
         **kwargs,
     ):
         if isinstance(self.dtype, StringDtype):
@@ -2249,6 +2250,7 @@ class ArrowExtensionArray(
                 how=how,
                 has_dropped_na=has_dropped_na,
                 min_count=min_count,
+                skipna=skipna,
                 ngroups=ngroups,
                 ids=ids,
                 **kwargs,
@@ -2270,6 +2272,7 @@ class ArrowExtensionArray(
             min_count=min_count,
             ngroups=ngroups,
             ids=ids,
+            skipna=skipna,
             **kwargs,
         )
         if isinstance(result, np.ndarray):

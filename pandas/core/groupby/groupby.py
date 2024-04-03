@@ -1754,6 +1754,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         *,
         alias: str,
         npfunc: Callable | None = None,
+        skipna: bool = True,
         **kwargs,
     ):
         result = self._cython_agg_general(
@@ -1761,6 +1762,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
             alt=npfunc,
             numeric_only=numeric_only,
             min_count=min_count,
+            skipna=skipna,
             **kwargs,
         )
         return result.__finalize__(self.obj, method="groupby")
@@ -1814,6 +1816,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         alt: Callable | None = None,
         numeric_only: bool = False,
         min_count: int = -1,
+        skipna: bool = True,
         **kwargs,
     ):
         # Note: we never get here with how="ohlc" for DataFrameGroupBy;
@@ -1829,6 +1832,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
                     how,
                     axis=data.ndim - 1,
                     min_count=min_count,
+                    skipna=skipna,
                     **kwargs,
                 )
             except NotImplementedError:
@@ -2210,6 +2214,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
     def mean(
         self,
         numeric_only: bool = False,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
     ):
@@ -2300,7 +2305,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
             return result.__finalize__(self.obj, method="groupby")
 
     @final
-    def median(self, numeric_only: bool = False) -> NDFrameT:
+    def median(self, numeric_only: bool = False, skipna: bool = True) -> NDFrameT:
         """
         Compute median of groups, excluding missing values.
 
@@ -2392,6 +2397,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
     def std(
         self,
         ddof: int = 1,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
         numeric_only: bool = False,
@@ -2502,6 +2508,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
     def var(
         self,
         ddof: int = 1,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
         numeric_only: bool = False,
@@ -2731,7 +2738,12 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         return result.__finalize__(self.obj, method="value_counts")
 
     @final
-    def sem(self, ddof: int = 1, numeric_only: bool = False) -> NDFrameT:
+    def sem(
+        self,
+        ddof: int = 1,
+        numeric_only: bool = False,
+        skipna: bool = True,
+    ) -> NDFrameT:
         """
         Compute standard error of the mean of groups, excluding missing values.
 
@@ -2968,6 +2980,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         self,
         numeric_only: bool = False,
         min_count: int = 0,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
     ):
@@ -2979,6 +2992,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
                 executor.default_dtype_mapping,
                 engine_kwargs,
                 min_periods=min_count,
+                skipna=skipna,
             )
         else:
             # If we are grouping on categoricals we want unobserved categories to
@@ -2990,6 +3004,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
                     min_count=min_count,
                     alias="sum",
                     npfunc=np.sum,
+                    skipna=skipna,
                 )
 
             return result
@@ -3035,7 +3050,12 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         2   30   72"""
         ),
     )
-    def prod(self, numeric_only: bool = False, min_count: int = 0) -> NDFrameT:
+    def prod(
+        self,
+        numeric_only: bool = False,
+        min_count: int = 0,
+        skipna: bool = True,
+    ) -> NDFrameT:
         return self._agg_general(
             numeric_only=numeric_only, min_count=min_count, alias="prod", npfunc=np.prod
         )
@@ -3087,6 +3107,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         self,
         numeric_only: bool = False,
         min_count: int = -1,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
     ):
@@ -3155,6 +3176,7 @@ class GroupBy(BaseGroupBy[NDFrameT]):
         self,
         numeric_only: bool = False,
         min_count: int = -1,
+        skipna: bool = True,
         engine: Literal["cython", "numba"] | None = None,
         engine_kwargs: dict[str, bool] | None = None,
     ):

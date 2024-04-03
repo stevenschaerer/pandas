@@ -2337,6 +2337,7 @@ class ExtensionArray:
         min_count: int,
         ngroups: int,
         ids: npt.NDArray[np.intp],
+        skipna: bool,
         **kwargs,
     ) -> ArrayLike:
         """
@@ -2389,6 +2390,7 @@ class ExtensionArray:
             ngroups=ngroups,
             comp_ids=ids,
             mask=None,
+            skipna=skipna,
             **kwargs,
         )
 

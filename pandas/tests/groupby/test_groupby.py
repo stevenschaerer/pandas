@@ -2785,6 +2785,36 @@ def test_groupby_sum_on_nan_should_return_nan(bug_var):
 
 
 @pytest.mark.parametrize(
+    ["func", "expected_wo_na"],
+    [
+        ("sum", 9.0),
+        ("mean", 3.0),
+        ("median", 3.5),
+        ("min", 1.0),
+        ("max", 4.5),
+        ("std", np.sqrt(3.25)),
+        ("var", 3.25),
+        ("prod", 15.75),
+        ("sem", 1.0408329997330663),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_sum_with_nan(func, expected_wo_na, skipna):
+    df = DataFrame(
+        {
+            "x": ["a", "b", "a", "b", "a", "b", "a"],
+            "y": [1.0, 1.0, 3.5, 3.5, 4.5, 4.5, np.nan],
+        }
+    )
+    result = getattr(df.groupby(["x"]), func)(skipna=skipna)
+
+    expected_df = DataFrame(
+        {"x": ["a", "b"], "y": [expected_wo_na if skipna else np.nan, expected_wo_na]}
+    ).set_index("x")
+    tm.assert_frame_equal(result, expected_df)
+
+
+@pytest.mark.parametrize(
     "method",
     [
         "count",

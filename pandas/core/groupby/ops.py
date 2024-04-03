@@ -317,6 +317,7 @@ class WrappedCythonOp:
         comp_ids: np.ndarray,
         mask: npt.NDArray[np.bool_] | None = None,
         result_mask: npt.NDArray[np.bool_] | None = None,
+        skipna: bool = True,
         **kwargs,
     ) -> np.ndarray:
         if values.ndim == 1:
@@ -333,6 +334,7 @@ class WrappedCythonOp:
                 comp_ids=comp_ids,
                 mask=mask,
                 result_mask=result_mask,
+                skipna=skipna,
                 **kwargs,
             )
             if res.shape[0] == 1:
@@ -348,6 +350,7 @@ class WrappedCythonOp:
             comp_ids=comp_ids,
             mask=mask,
             result_mask=result_mask,
+            skipna=skipna,
             **kwargs,
         )
 
@@ -357,6 +360,7 @@ class WrappedCythonOp:
         values: np.ndarray,  # np.ndarray[ndim=2]
         *,
         min_count: int,
+        skipna: bool,
         ngroups: int,
         comp_ids: np.ndarray,
         mask: npt.NDArray[np.bool_] | None,
@@ -424,11 +428,14 @@ class WrappedCythonOp:
                     mask=mask,
                     result_mask=result_mask,
                     is_datetimelike=is_datetimelike,
+                    skipna=skipna,
                     **kwargs,
                 )
             elif self.how in ["sem", "std", "var", "ohlc", "prod", "median"]:
                 if self.how in ["std", "sem"]:
                     kwargs["is_datetimelike"] = is_datetimelike
+                if self.how != "ohlc":
+                    kwargs["skipna"] = skipna
                 func(
                     result,
                     counts,
@@ -457,6 +464,7 @@ class WrappedCythonOp:
                     labels=comp_ids,
                     mask=mask,
                     result_mask=result_mask,
+                    skipna=skipna,
                     **kwargs,
                 )
                 if dtype == object:
@@ -527,6 +535,7 @@ class WrappedCythonOp:
         values: ArrayLike,
         axis: AxisInt,
         min_count: int = -1,
+        skipna: bool = True,
         comp_ids: np.ndarray,
         ngroups: int,
         **kwargs,
@@ -544,6 +553,7 @@ class WrappedCythonOp:
                 min_count=min_count,
                 ngroups=ngroups,
                 ids=comp_ids,
+                skipna=skipna,
                 **kwargs,
             )
 
@@ -553,6 +563,7 @@ class WrappedCythonOp:
             ngroups=ngroups,
             comp_ids=comp_ids,
             mask=None,
+            skipna=skipna,
             **kwargs,
         )
 
@@ -877,6 +888,7 @@ class BaseGrouper:
         how: str,
         axis: AxisInt,
         min_count: int = -1,
+        skipna: bool = True,
         **kwargs,
     ) -> ArrayLike:
         """
@@ -892,6 +904,7 @@ class BaseGrouper:
             min_count=min_count,
             comp_ids=self.ids,
             ngroups=self.ngroups,
+            skipna=skipna,
             **kwargs,
         )
 
