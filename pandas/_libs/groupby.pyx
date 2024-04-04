@@ -867,6 +867,9 @@ def group_var(
             counts[lab] += 1
 
             for j in range(K):
+                if not skipna and out[lab, j] != out[lab, j]:
+                    # Once we've hit NA there is no going back
+                    continue
                 val = values[i, j]
 
                 if uses_mask:
@@ -884,11 +887,13 @@ def group_var(
                     oldmean = mean[lab, j]
                     mean[lab, j] += (val - oldmean) / nobs[lab, j]
                     out[lab, j] += (val - mean[lab, j]) * (val - oldmean)
+                elif not skipna:
+                    out[lab, j] = NAN
 
         for i in range(ncounts):
             for j in range(K):
                 ct = nobs[i, j]
-                if ct <= ddof:
+                if ct <= ddof or out[i, j] != out[i, j]:
                     if uses_mask:
                         result_mask[i, j] = True
                     else:
@@ -1734,6 +1739,12 @@ cdef group_min_max(
 
             counts[lab] += 1
             for j in range(K):
+                if (
+                    not skipna
+                    and _treat_as_na(group_min_or_max[lab, j], is_datetimelike)
+                ):
+                    # Once we've hit NA there is no going back
+                    continue
                 val = values[i, j]
 
                 if uses_mask:
@@ -1749,6 +1760,10 @@ cdef group_min_max(
                     else:
                         if val < group_min_or_max[lab, j]:
                             group_min_or_max[lab, j] = val
+                elif not skipna:
+                    if uses_mask:
+                        result_mask[lab, j] = mask[i, j]
+                    group_min_or_max[lab, j] = val
 
     _check_below_mincount(
         out, uses_mask, result_mask, ngroups, K, nobs, min_count, group_min_or_max
