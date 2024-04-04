@@ -804,6 +804,10 @@ def group_prod(
 
             counts[lab] += 1
             for j in range(K):
+                if not skipna and _treat_as_na(prodx[lab, j], False):
+                    # Once we've hit NA there is no going back
+                    continue
+
                 val = values[i, j]
 
                 if uses_mask:
@@ -814,6 +818,10 @@ def group_prod(
                 if not isna_entry:
                     nobs[lab, j] += 1
                     prodx[lab, j] *= val
+                elif not skipna:
+                    if uses_mask:
+                        result_mask[lab, j] = mask[i, j]
+                    prodx[lab, j] = val
 
     _check_below_mincount(
         out, uses_mask, result_mask, ncounts, K, nobs, min_count, prodx

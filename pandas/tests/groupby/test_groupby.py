@@ -2787,47 +2787,153 @@ def test_groupby_sum_on_nan_should_return_nan(bug_var):
 @pytest.mark.parametrize(
     ["func", "expected_wo_na_y", "expected_wo_na_z"],
     [
-        # ("sum", 9.0, 18.0),
-        # ("mean", 3.0, 6.0),
-        # ("median", 3.5, 7.0),
-        # ("min", 1.0, 2.0),
-        # ("max", 4.5, 9.0),
-        # ("std", np.sqrt(3.25), np.sqrt(3.25) * 2),
-        # ("var", 3.25, 3.25 * 4),
-        # ("sem", 1.0408329997330663, 1.0408329997330663 * 2),
-        ("prod", 15.75, 15.75 * 8),
+        ("sum", 9, 18),
+        ("mean", 3, 6),
+        ("median", 2, 4),
+        ("min", 1, 2),
+        ("max", 6, 12),
+        ("std", np.sqrt(7), np.sqrt(28)),
+        ("var", 7, 28),
+        ("sem", 1.5275252316519468, 3.0550504633038935),
+        ("prod", 12, 96),
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False])
-def test_groupby_floats_with_nan(func, expected_wo_na_y, expected_wo_na_z, skipna):
-    # TODO: test sum with object dtype
-    # TODO: add a column without nans?
-    # TODO: test with multiple nans
-    # TODO: test with masks
+def test_groupby_skipna_with_mask(
+    any_numeric_ea_and_arrow_dtype, func, expected_wo_na_y, expected_wo_na_z, skipna
+):
+    # TODO: test with time delta, object? where supported
+    # TODO: test with multiple nans?
+    float_results = {"mean", "median", "std", "var", "sem"}
+    dtype = any_numeric_ea_and_arrow_dtype
+
     df = DataFrame(
         {
-            "x": ["a", "b", "a", "b", "a", "a", "b"],
-            "y": [1.0, 1.0, 3.5, 3.5, np.nan, 4.5, 4.5],
-            "z": [
-                2.0,
-                2.0,
-                7.0,
-                7.0,
-                9.0,
-                np.nan,
-                9.0,
-            ],  # nan purposely in different row
-        }
+            "x": [0, 1, 0, 1, 0, 0, 1],
+            "y": [1, 1, 2, 2, pd.NA, 6, 6],
+            "z": [2, 2, 4, 4, 12, pd.NA, 12],
+        },
+        dtype=dtype,
     )
     result = getattr(df.groupby(["x"]), func)(skipna=skipna)
 
-    expected_df = DataFrame(
+    expected_dtype = dtype
+    if func in float_results:
+        if "pyarrow" in dtype:
+            expected_dtype = (
+                "float[pyarrow]" if dtype == "float[pyarrow]" else "double[pyarrow]"
+            )
+        else:
+            expected_dtype = "Float32" if dtype == "Float32" else "Float64"
+    expected_df = (
+        DataFrame(
+            {
+                "x": [0, 1],
+                "y": [expected_wo_na_y if skipna else np.nan, expected_wo_na_y],
+                "z": [expected_wo_na_z if skipna else np.nan, expected_wo_na_z],
+            },
+        )
+        .astype({"x": dtype, "y": expected_dtype, "z": expected_dtype})
+        .set_index("x")
+    )
+    tm.assert_frame_equal(result, expected_df)
+
+
+@pytest.mark.parametrize(
+    ["func", "expected_wo_na_y", "expected_wo_na_z"],
+    [
+        ("sum", 9, 18),
+        ("mean", 3, 6),
+        ("median", 2, 4),
+        ("min", 1, 2),
+        ("max", 6, 12),
+        ("std", np.sqrt(7), np.sqrt(28)),
+        ("var", 7, 28),
+        ("sem", 1.5275252316519468, 3.0550504633038935),
+        ("prod", 12, 96),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_skipna_without_mask(
+    float_numpy_dtype, func, expected_wo_na_y, expected_wo_na_z, skipna
+):
+    # TODO: test with time delta, object? where supported
+    # TODO: test with multiple nans?
+    # TODO: test with complex?
+    float_results = {"mean", "median", "std", "var", "sem"}
+    dtype = float_numpy_dtype
+
+    df = DataFrame(
         {
-            "x": ["a", "b"],
-            "y": [expected_wo_na_y if skipna else np.nan, expected_wo_na_y],
-            "z": [expected_wo_na_z if skipna else np.nan, expected_wo_na_z],
-        }
-    ).set_index("x")
+            "x": [0, 1, 0, 1, 0, 0, 1],
+            "y": [1, 1, 2, 2, None, 6, 6],
+            "z": [2, 2, 4, 4, 12, None, 12],
+        },
+        dtype=dtype,
+    )
+    result = getattr(df.groupby(["x"]), func)(skipna=skipna)
+
+    expected_dtype = dtype
+    if func in float_results:
+        expected_dtype = np.float32 if dtype == "float32" else np.float64
+    expected_df = (
+        DataFrame(
+            {
+                "x": [0, 1],
+                "y": [expected_wo_na_y if skipna else np.nan, expected_wo_na_y],
+                "z": [expected_wo_na_z if skipna else np.nan, expected_wo_na_z],
+            },
+        )
+        .astype({"x": dtype, "y": expected_dtype, "z": expected_dtype})
+        .set_index("x")
+    )
+    tm.assert_frame_equal(result, expected_df)
+
+
+@pytest.mark.parametrize(
+    ["func", "expected_wo_na_y", "expected_wo_na_z"],
+    [
+        ("sum", 9, 18),
+        ("mean", 3, 6),
+        ("median", 2, 4),
+        ("min", 1, 2),
+        ("max", 6, 12),
+        ("std", np.sqrt(7), np.sqrt(28)),
+        ("var", 7, 28),
+        ("sem", 1.5275252316519468, 3.0550504633038935),
+        ("prod", 12, 96),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_skipna_object(func, expected_wo_na_y, expected_wo_na_z, skipna):
+    # TODO: test with time delta, object? where supported
+    # TODO: test with multiple nans?
+    # TODO: test with complex?
+    float_results = {"std", "sem"}
+    dtype = object
+
+    df = DataFrame(
+        {
+            "x": [0, 1, 0, 1, 0, 0, 1],
+            "y": [1, 1, 2, 2, None, 6, 6],
+            "z": [2, 2, 4, 4, 12, None, 12],
+        },
+        dtype=dtype,
+    )
+    result = getattr(df.groupby(["x"]), func)(skipna=skipna)
+
+    expected_dtype = dtype if func not in float_results else "float64"
+    expected_df = (
+        DataFrame(
+            {
+                "x": [0, 1],
+                "y": [expected_wo_na_y if skipna else np.nan, expected_wo_na_y],
+                "z": [expected_wo_na_z if skipna else np.nan, expected_wo_na_z],
+            },
+        )
+        .astype({"x": "int64", "y": expected_dtype, "z": expected_dtype})
+        .set_index("x")
+    )
     tm.assert_frame_equal(result, expected_df)
 
 
