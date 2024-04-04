@@ -62,7 +62,12 @@ cdef enum InterpolationEnumType:
     INTERPOLATION_MIDPOINT
 
 
-cdef float64_t median_linear_mask(float64_t* a, int n, uint8_t* mask) noexcept nogil:
+cdef float64_t median_linear_mask(
+    float64_t* a,
+    int n,
+    uint8_t* mask,
+    bint skipna
+) noexcept nogil:
     cdef:
         int i, j, na_count = 0
         float64_t* tmp
@@ -74,6 +79,8 @@ cdef float64_t median_linear_mask(float64_t* a, int n, uint8_t* mask) noexcept n
     # count NAs
     for i in range(n):
         if mask[i]:
+            if not skipna:
+                return NaN
             na_count += 1
 
     if na_count:
@@ -99,7 +106,7 @@ cdef float64_t median_linear_mask(float64_t* a, int n, uint8_t* mask) noexcept n
     return result
 
 
-cdef float64_t median_linear(float64_t* a, int n) noexcept nogil:
+cdef float64_t median_linear(float64_t* a, int n, bint skipna) noexcept nogil:
     cdef:
         int i, j, na_count = 0
         float64_t* tmp
@@ -111,6 +118,8 @@ cdef float64_t median_linear(float64_t* a, int n) noexcept nogil:
     # count NAs
     for i in range(n):
         if a[i] != a[i]:
+            if not skipna:
+                return NaN
             na_count += 1
 
     if na_count:
@@ -210,7 +219,7 @@ def group_median_float64(
 
                 for j in range(ngroups):
                     size = _counts[j + 1]
-                    result = median_linear_mask(ptr, size, ptr_mask)
+                    result = median_linear_mask(ptr, size, ptr_mask, skipna)
                     out[j, i] = result
 
                     if result != result:
@@ -225,7 +234,7 @@ def group_median_float64(
                 ptr += _counts[0]
                 for j in range(ngroups):
                     size = _counts[j + 1]
-                    out[j, i] = median_linear(ptr, size)
+                    out[j, i] = median_linear(ptr, size, skipna)
                     ptr += size
 
 
@@ -708,6 +717,10 @@ def group_sum(
             counts[lab] += 1
 
             for j in range(K):
+                if not skipna and _treat_as_na(sumx[lab, j], is_datetimelike):
+                    # Once we've hit NA there is no going back
+                    continue
+
                 val = values[i, j]
 
                 if uses_mask:
@@ -741,8 +754,11 @@ def group_sum(
                             # because of no gil
                             compensation[lab, j] = 0
                         sumx[lab, j] = t
-                elif skipna:
-                    pass
+                elif not skipna:
+                    if uses_mask:
+                        result_mask[lab, j] = mask[i, j]
+                    # TODO: figure out whether to add some constant NAN value here
+                    sumx[lab, j] = val
 
     _check_below_mincount(
         out, uses_mask, result_mask, ncounts, K, nobs, min_count, sumx
@@ -1078,6 +1094,10 @@ def group_mean(
                         # because of no gil
                         compensation[lab, j] = 0.
                     sumx[lab, j] = t
+                elif not skipna:
+                    if uses_mask:
+                        result_mask[lab, j] = mask[i, j]
+                    sumx[lab, j] = nan_val
 
         for i in range(ncounts):
             for j in range(K):

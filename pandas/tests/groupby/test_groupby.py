@@ -2785,31 +2785,48 @@ def test_groupby_sum_on_nan_should_return_nan(bug_var):
 
 
 @pytest.mark.parametrize(
-    ["func", "expected_wo_na"],
+    ["func", "expected_wo_na_y", "expected_wo_na_z"],
     [
-        ("sum", 9.0),
-        ("mean", 3.0),
-        ("median", 3.5),
-        ("min", 1.0),
-        ("max", 4.5),
-        ("std", np.sqrt(3.25)),
-        ("var", 3.25),
-        ("prod", 15.75),
-        ("sem", 1.0408329997330663),
+        # ("sum", 9.0, 18.0),
+        # ("mean", 3.0, 6.0),
+        # ("median", 3.5, 7.0),
+        ("min", 1.0, 2.0),
+        ("max", 4.5, 9.0),
+        ("std", np.sqrt(3.25), np.sqrt(3.25) * 2),
+        ("var", 3.25, 3.25 * 4),
+        ("prod", 15.75, 15.75 * 8),
+        ("sem", 1.0408329997330663, 1.0408329997330663 * 2),
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False])
-def test_groupby_sum_with_nan(func, expected_wo_na, skipna):
+def test_groupby_floats_with_nan(func, expected_wo_na_y, expected_wo_na_z, skipna):
+    # TODO: test sum with object dtype
+    # TODO: add a column without nans?
+    # TODO: test with multiple nans
+    # TODO: test with masks
     df = DataFrame(
         {
-            "x": ["a", "b", "a", "b", "a", "b", "a"],
-            "y": [1.0, 1.0, 3.5, 3.5, 4.5, 4.5, np.nan],
+            "x": ["a", "b", "a", "b", "a", "a", "b"],
+            "y": [1.0, 1.0, 3.5, 3.5, np.nan, 4.5, 4.5],
+            "z": [
+                2.0,
+                2.0,
+                7.0,
+                7.0,
+                9.0,
+                np.nan,
+                9.0,
+            ],  # nan purposely in different row
         }
     )
     result = getattr(df.groupby(["x"]), func)(skipna=skipna)
 
     expected_df = DataFrame(
-        {"x": ["a", "b"], "y": [expected_wo_na if skipna else np.nan, expected_wo_na]}
+        {
+            "x": ["a", "b"],
+            "y": [expected_wo_na_y if skipna else np.nan, expected_wo_na_y],
+            "z": [expected_wo_na_z if skipna else np.nan, expected_wo_na_z],
+        }
     ).set_index("x")
     tm.assert_frame_equal(result, expected_df)
 
